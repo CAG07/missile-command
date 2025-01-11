@@ -4,10 +4,11 @@
 name: Python application
 
 on:
-  push:
-    branches: [ "main, dev" ]
-  pull_request:
-    branches: [ "main, dev" ]
+  workflow_run:
+    workflows: ["Pylint"]
+    types:
+      - completed
+    branches: [ main, dev ]
 
 permissions:
   contents: read
