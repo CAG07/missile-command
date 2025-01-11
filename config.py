@@ -1,5 +1,6 @@
 import pygame
 
+#pylint test
 #from functions import *
 #pygame.mixer.init()
 
