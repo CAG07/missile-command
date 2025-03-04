@@ -1,4 +1,4 @@
-# .github/workflows/1-python-setup.yml
+# .github/workflows/python-setup.yml
 name: Python Environment Setup
 
 on:
@@ -7,13 +7,13 @@ on:
     paths:
       - 'requirements.txt'
       - '**.py'
-      - '.github/workflows/1-python-setup.yml'
+      - '.github/workflows/python-setup.yml'
   pull_request:
     branches: [ main, dev ]
     paths:
       - 'requirements.txt'
       - '**.py'
-      - '.github/workflows/1-python-setup.yml'
+      - '.github/workflows/python-setup.yml'
 
 permissions:
   contents: read
