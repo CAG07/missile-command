@@ -1,0 +1,68 @@
+# .github/workflows/python-setup.yml
+name: Python Environment Setup
+
+on:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'requirements.txt'
+      - '**.py'
+      - '.github/workflows/python-setup.yml'
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'requirements.txt'
+      - '**.py'
+      - '.github/workflows/python-setup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install SDL and other dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+                                libfreetype6-dev libportmidi-dev python3-dev
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install wheel setuptools
+        
+        # Create modified requirements without pygame
+        cat requirements.txt | grep -v pygame > requirements_no_pygame.txt
+        
+        # Install pygame from binary wheel
+        pip install pygame==2.0.1 --only-binary=pygame
+        
+        # Install remaining requirements
+        pip install -r requirements_no_pygame.txt
+        pip install flake8 pytest black mypy safety
+    
+    - name: Verify pygame installation
+      run: |
+        python -c "import pygame; print(pygame.ver)"
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-py${{ matrix.python-version }}-pip-
