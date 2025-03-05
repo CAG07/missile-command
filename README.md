@@ -90,6 +90,7 @@ missile-command/
 │   └── sfx/
 │
 ├── tests/
+│   ├── test_main.py
 │   ├── test_missile.py
 │   ├── test_defence.py
 │   └── test_game.py
