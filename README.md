@@ -61,7 +61,7 @@ python missile-defense.py
 - **Escape Key**: Pause/Exit game
 
 ## Project Structure
-
+```
 missile-command/
 │
 ├── src/
@@ -97,7 +97,7 @@ missile-command/
 ├── requirements.txt
 ├── README.md
 └── main.py
-
+```
 ## Development Roadmap
 
 - [x] Basic game mechanics
@@ -114,7 +114,7 @@ missile-command/
 ## Acknowledgments
 
 - Inspired by the original Atari Missile Command
-- Based on initial work by BekBrace
+- Based on initial work by [BekBrace](https://github.com/BekBrace)
 - Special thanks to the original game designers at Atari
 
 ## Contact
