@@ -4,7 +4,7 @@
 
 A faithful recreation of the classic 1980 Atari arcade game, Missile Command, implemented in Python. This project aims to capture the intense strategic gameplay of defending cities from nuclear missile attacks while staying true to the original game's mechanics.
 
-![Game Screenshot](missile-command\Missile_Command.png)
+![Game Screenshot](Missile_Command.png)
 
 ## Background
 
