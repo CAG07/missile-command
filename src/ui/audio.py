@@ -61,38 +61,57 @@ class AudioManager:
         before giving up.
         """
         if not self.enabled:
+            print("AudioManager: disabled via config")
             return False
 
         try:
             import pygame.mixer
-            if not pygame.mixer.get_init():
-                # Try default driver first; if that fails, try common
-                # fallback drivers that work inside virtual environments.
+
+            # Check if already initialized
+            if pygame.mixer.get_init():
+                print(f"AudioManager: mixer already initialized: {pygame.mixer.get_init()}")
+                self._initialized = True
+            else:
                 drivers = [None, "pulseaudio", "alsa", "dsp", "dummy"]
                 initialized = False
                 original_driver = os.environ.get("SDL_AUDIODRIVER")
+
                 for driver in drivers:
                     try:
                         if driver is not None:
                             os.environ["SDL_AUDIODRIVER"] = driver
-                        pygame.mixer.init()
+                            print(f"AudioManager: trying driver '{driver}'")
+                        else:
+                            print("AudioManager: trying default driver")
+
+                        # Use specific mixer parameters for consistent
+                        # audio quality across platforms.
+                        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+                        print(f"AudioManager: SUCCESS with driver '{driver or 'default'}'")
+                        print(f"AudioManager: mixer config: {pygame.mixer.get_init()}")
                         initialized = True
                         break
-                    except Exception:
+                    except Exception as e:
+                        print(f"AudioManager: FAILED with driver '{driver or 'default'}': {e}")
                         continue
-                # Restore original environment variable only when
-                # initialisation failed so that a working fallback
-                # driver stays active for any future re-init.
+
                 if not initialized:
                     if original_driver is not None:
                         os.environ["SDL_AUDIODRIVER"] = original_driver
                     elif "SDL_AUDIODRIVER" in os.environ:
                         del os.environ["SDL_AUDIODRIVER"]
-                if not initialized:
+                    print("AudioManager: all drivers failed")
                     self._initialized = False
                     return False
-            self._initialized = True
-        except Exception:
+
+                self._initialized = True
+
+        except ImportError as e:
+            print(f"AudioManager: pygame.mixer import failed: {e}")
+            self._initialized = False
+            return False
+        except Exception as e:
+            print(f"AudioManager: unexpected error: {e}")
             self._initialized = False
             return False
 
@@ -102,19 +121,28 @@ class AudioManager:
     def _load_sounds(self) -> None:
         """Attempt to load each configured sound file."""
         if not self._initialized:
+            print("AudioManager: cannot load sounds, not initialized")
             return
+
         try:
             import pygame.mixer
         except ImportError:
+            print("AudioManager: pygame.mixer not available for loading")
             return
 
+        print(f"AudioManager: loading sounds from '{self.sfx_dir}'")
         for event, filename in _SOUND_FILES.items():
             path = os.path.join(self.sfx_dir, filename)
             if os.path.isfile(path):
                 try:
                     self._sounds[event] = pygame.mixer.Sound(path)
-                except Exception:
-                    pass
+                    print(f"AudioManager: loaded {event.name} from {filename}")
+                except Exception as e:
+                    print(f"AudioManager: FAILED to load {filename}: {e}")
+            else:
+                print(f"AudioManager: file not found: {path}")
+
+        print(f"AudioManager: loaded {len(self._sounds)}/{len(_SOUND_FILES)} sounds")
 
     def play(self, event: SoundEvent) -> None:
         """Play the sound associated with *event*, if available."""

@@ -164,6 +164,12 @@ class TestAudioManager:
         assert result is False
         assert am._initialized is False
 
+    def test_disabled_audio_prints_message(self, capsys):
+        am = AudioManager(enabled=False)
+        am.init()
+        captured = capsys.readouterr()
+        assert "AudioManager: disabled via config" in captured.out
+
     def test_play_when_not_initialized(self):
         am = AudioManager(enabled=False)
         # Should not raise
@@ -186,6 +192,21 @@ class TestAudioManager:
         # _load_sounds should not raise even with bad dir
         am._load_sounds()
         assert len(am._sounds) == 0
+
+    def test_load_sounds_not_initialized_prints_message(self, capsys):
+        am = AudioManager(sfx_dir="/nonexistent/path")
+        am._load_sounds()
+        captured = capsys.readouterr()
+        assert "AudioManager: cannot load sounds, not initialized" in captured.out
+
+    def test_load_sounds_missing_files_prints_message(self, capsys, tmp_path):
+        am = AudioManager(sfx_dir=str(tmp_path))
+        am._initialized = True
+        am._load_sounds()
+        captured = capsys.readouterr()
+        assert f"AudioManager: loading sounds from '{tmp_path}'" in captured.out
+        assert "AudioManager: file not found:" in captured.out
+        assert "AudioManager: loaded 0/7 sounds" in captured.out
 
 
 # ── Game Over Integration ──────────────────────────────────────────────────
