@@ -21,6 +21,11 @@ import os
 _DEFAULT_SCORES_FILE = "scores.json"
 
 
+def _normalize_score(value: object) -> int:
+    """Convert a score value (int or padded string) to int."""
+    return int(str(value).strip()) if value else 0
+
+
 # ── I/O helpers ─────────────────────────────────────────────────────────────
 
 
@@ -36,7 +41,7 @@ def load_scores(filepath: str = _DEFAULT_SCORES_FILE) -> dict:
                 data = json.load(f)
             # Normalise any stringified scores (e.g. "  500")
             for record in data.values():
-                record["score"] = int(str(record.get("score", 0)).strip())
+                record["score"] = _normalize_score(record.get("score", 0))
             return data
         except Exception:
             pass
@@ -60,7 +65,7 @@ def check_high_score(score: int, high_scores: dict) -> int:
     """Return the 1-based position a *score* would occupy, or 0."""
     score_pos = 0
     for pos, record in high_scores.items():
-        if score > int(str(record["score"]).strip()) and score_pos == 0:
+        if score > _normalize_score(record["score"]) and score_pos == 0:
             score_pos = int(pos)
     return score_pos
 
@@ -94,7 +99,7 @@ def get_top_score(high_scores: dict) -> int:
     """Return the highest score from the leaderboard dict."""
     if not high_scores:
         return 0
-    return int(str(high_scores.get("1", {}).get("score", 0)).strip())
+    return _normalize_score(high_scores.get("1", {}).get("score", 0))
 
 
 # ── Internal helpers ────────────────────────────────────────────────────────

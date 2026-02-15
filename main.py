@@ -24,6 +24,7 @@ References:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -279,7 +280,6 @@ class MissileCommandApp:
             return
         font_path = "data/fnt/PressStart2P-Regular.ttf"
         try:
-            import os
             if os.path.isfile(font_path):
                 font = pygame.font.Font(font_path, 8 * self.scale)
             else:
