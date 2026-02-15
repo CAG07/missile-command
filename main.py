@@ -238,7 +238,7 @@ class MissileCommandApp:
     def _handle_events(self) -> None:
         """Process pygame events.
 
-        Keyboard controls (matching original arcade via MAME):
+        Keyboard controls (MAME-style emulation):
             Left Ctrl  – fire from left silo (index 0)
             Left Alt   – fire from center silo (index 1)
             Space      – fire from right silo (index 2)
