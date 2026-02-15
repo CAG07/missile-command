@@ -13,7 +13,7 @@ class Defense():
         self.color = DEFENSE                                # color of the defense turret
         self.x = self.target_pos[0] - self.pos[0]           # distance from x origin to x target
         self.y = self.target_pos[1] - self.pos[1]           # distance from y origin to y target
-        self.m = 0                                        # slop of gun barrel - will be set to correct value on first update
+        self.m = 0                                        # slope of gun barrel - will be set to correct value on first update
         self.angle = math.atan(self.m)                      # angle of gun barrel
         self.destroyed = False                              # has the defense been destroyed
         self.ammo = 30                                      # number of missiles
@@ -39,7 +39,7 @@ class Defense():
         self.x = self.target_pos[0] - self.pos[0]       # distance from x origin to x target
         self.y = self.target_pos[1] - self.pos[1]       # distance from y origin to y target
         if self.y != 0:
-            self.m = self.x / self.y                    # slop of gun barrel
+            self.m = self.x / self.y                    # slope of gun barrel
         self.angle = math.atan(self.m) + math.pi        # angle of gun barrel
         self.gun_end = (self.pos[0] + int(self.gun_size * math.sin(self.angle)), 
                         self.pos[1] + int(self.gun_size * math.cos(self.angle)))

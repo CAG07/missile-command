@@ -24,7 +24,7 @@ class Missile():
         self.x = target_pos[0] - origin_pos[0]      # distance from x origin to x target
         self.y = target_pos[1] - origin_pos[1]      # distance from y origin to y target
         if self.y != 0 :
-            self.m = self.x / self.y                # slop of missile trajectory
+            self.m = self.x / self.y                # slope of missile trajectory
         else:
             self.m = 1
         self.angle = math.atan(self.m)              # angle of missile trajectory
