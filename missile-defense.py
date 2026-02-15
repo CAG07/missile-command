@@ -17,7 +17,10 @@ from text import InputBox
 
 # Initialize game engine, screen and clock
 pygame.init()
-#pygame.mixer.init()
+try:
+    pygame.mixer.init()
+except Exception:
+    pass  # Audio unavailable; continue without sound
 screen = pygame.display.set_mode(SCREENSIZE)
 pygame.mouse.set_visible(SHOW_MOUSE)
 pygame.display.set_caption(TITLE)
@@ -144,6 +147,11 @@ def main():
                     input_box.handle_event(event)
                 input_box.update()
                 input_box.draw(screen)
+
+            # Clear the screen to remove the InputBox outline before
+            # transitioning to the menu / high-scores screen.
+            screen.fill(BACKGROUND)
+            pygame.display.update()
                 
             current_game_state = GAME_STATE_MENU
         
