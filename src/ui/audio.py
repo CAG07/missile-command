@@ -70,6 +70,7 @@ class AudioManager:
                 # fallback drivers that work inside virtual environments.
                 drivers = [None, "pulseaudio", "alsa", "dsp", "dummy"]
                 initialized = False
+                original_driver = os.environ.get("SDL_AUDIODRIVER")
                 for driver in drivers:
                     try:
                         if driver is not None:
@@ -79,6 +80,11 @@ class AudioManager:
                         break
                     except Exception:
                         continue
+                # Restore original environment variable
+                if original_driver is not None:
+                    os.environ["SDL_AUDIODRIVER"] = original_driver
+                elif "SDL_AUDIODRIVER" in os.environ and not initialized:
+                    del os.environ["SDL_AUDIODRIVER"]
                 if not initialized:
                     self._initialized = False
                     return False
