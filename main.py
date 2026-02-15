@@ -35,6 +35,8 @@ except ImportError:
 
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, UPDATE_RATE
 from src.game import Game, GameState
+from src.ui.audio import AudioManager, SoundEvent
+from src.ui.high_scores import load_scores, save_high_scores, update_high_scores, get_top_score
 
 
 # ── Constants ───────────────────────────────────────────────────────────────
@@ -122,6 +124,14 @@ class MissileCommandApp:
     fps: float = 0.0
     defer_score_redraw: bool = False
 
+    # Audio
+    audio: AudioManager = field(default_factory=AudioManager)
+
+    # High scores
+    high_scores: dict = field(default_factory=dict)
+    scores_file: str = "scores.json"
+    _prev_state: GameState = GameState.ATTRACT
+
     # ── Initialisation ──────────────────────────────────────────────────
 
     def init(self) -> bool:
@@ -157,9 +167,14 @@ class MissileCommandApp:
         pygame.display.set_caption("Missile Command")
         self.clock = pygame.time.Clock()
 
+        # Load high scores and initialise audio
+        self.high_scores = load_scores(self.scores_file)
+        self.audio.init()
+
         # Configure game
         self.game = Game()
         self.game.wave_number = self.start_wave
+        self.game.score_display.high_score = get_top_score(self.high_scores)
         if self.tournament:
             self.game.cities.bonus_threshold = 0
 
@@ -228,7 +243,17 @@ class MissileCommandApp:
 
     def _update(self) -> None:
         """Run one frame of game logic."""
+        prev = self.game.state
         self.game.update()
+
+        # Detect game-over transition and save high score
+        if prev != GameState.GAME_OVER and self.game.state == GameState.GAME_OVER:
+            self.audio.play(SoundEvent.GAME_OVER)
+            score = self.game.score_display.player_score
+            self.high_scores = update_high_scores(score, "---", self.high_scores)
+            save_high_scores(self.scores_file, self.high_scores)
+        elif prev != GameState.WAVE_END and self.game.state == GameState.WAVE_END:
+            self.audio.play(SoundEvent.WAVE_END)
 
     # ── Rendering ───────────────────────────────────────────────────────
 
@@ -239,10 +264,48 @@ class MissileCommandApp:
 
         self.screen.fill((0, 0, 0))
 
+        # Game-over overlay
+        if self.game.state == GameState.GAME_OVER:
+            self._render_game_over()
+
         if self.debug:
             self._render_debug()
 
         pygame.display.flip()
+
+    def _render_game_over(self) -> None:
+        """Draw the GAME OVER screen with final score and high score."""
+        if pygame is None or self.screen is None:
+            return
+        font_path = "data/fnt/PressStart2P-Regular.ttf"
+        try:
+            import os
+            if os.path.isfile(font_path):
+                font = pygame.font.Font(font_path, 8 * self.scale)
+            else:
+                font = pygame.font.Font(None, 16 * self.scale)
+        except Exception:
+            font = pygame.font.Font(None, 16 * self.scale)
+
+        w = SCREEN_WIDTH * self.scale
+        h = SCREEN_HEIGHT * self.scale
+        color = (255, 255, 255)
+
+        game_over_surf = font.render("THE END", True, color)
+        score_surf = font.render(self.game.score_display.format_score(), True, color)
+        high_surf = font.render(self.game.score_display.format_high_score(), True, color)
+
+        go_x = w // 2 - game_over_surf.get_width() // 2
+        go_y = h // 2 - game_over_surf.get_height() * 2
+        self.screen.blit(game_over_surf, (go_x, go_y))
+
+        sc_x = w // 2 - score_surf.get_width() // 2
+        sc_y = go_y + game_over_surf.get_height() + 8 * self.scale
+        self.screen.blit(score_surf, (sc_x, sc_y))
+
+        hi_x = w // 2 - high_surf.get_width() // 2
+        hi_y = sc_y + score_surf.get_height() + 4 * self.scale
+        self.screen.blit(high_surf, (hi_x, hi_y))
 
     def _render_debug(self) -> None:
         """Draw debug overlays (FPS, slot counts)."""
@@ -268,6 +331,7 @@ class MissileCommandApp:
     def shutdown(self) -> None:
         """Clean up and quit pygame."""
         self.running = False
+        self.audio.shutdown()
         if pygame is not None:
             try:
                 pygame.quit()

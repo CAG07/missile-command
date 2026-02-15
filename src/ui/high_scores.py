@@ -2,123 +2,106 @@
 High-score persistence for Missile Command.
 
 Loads and saves a top-10 leaderboard in JSON format, matching the
-structure already used by the legacy ``scores.json`` file.
+structure used by the existing ``scores.json`` file.
+
+The dict layout is ``{"1": {"name": ..., "score": ...}, ...}`` with
+string keys ``"1"`` through ``"10"`` in descending rank order.
+
+These functions mirror the legacy helpers in ``functions.py``
+(``load_scores``, ``save_high_scores``, ``update_high_scores``,
+``check_high_score``) but are importable from the ``src`` package
+without pulling in pygame or the old config module.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
-
 
 _DEFAULT_SCORES_FILE = "scores.json"
 
-_DEFAULT_ENTRIES: list[dict[str, object]] = [
-    {"name": "---", "score": 0} for _ in range(10)
-]
+
+# ── I/O helpers ─────────────────────────────────────────────────────────────
 
 
-@dataclass
-class HighScoreManager:
-    """Manages a persistent top-10 leaderboard.
+def load_scores(filepath: str = _DEFAULT_SCORES_FILE) -> dict:
+    """Open a JSON file containing scores and return a dict.
 
-    Entries are kept in descending score order (index 0 = #1).
+    Falls back to an empty top-10 table if the file is missing or
+    malformed.
     """
-
-    filepath: str = _DEFAULT_SCORES_FILE
-    entries: list[dict[str, object]] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        if not self.entries:
-            self.load()
-
-    # ── I/O ─────────────────────────────────────────────────────────────
-
-    def load(self) -> None:
-        """Load high scores from *filepath*.
-
-        Falls back to defaults if the file is missing or malformed.
-        """
-        if os.path.isfile(self.filepath):
-            try:
-                with open(self.filepath, "r") as fh:
-                    data = json.load(fh)
-                self.entries = self._parse(data)
-                return
-            except Exception:
-                pass
-        self.entries = [dict(e) for e in _DEFAULT_ENTRIES]
-
-    @staticmethod
-    def _parse(data: object) -> list[dict[str, object]]:
-        """Normalise the legacy ``{"1": {...}, "2": {...}}`` format."""
-        entries: list[dict[str, object]] = []
-        if isinstance(data, dict):
-            for key in sorted(data.keys(), key=lambda k: int(k)):
-                record = data[key]
-                entries.append({
-                    "name": str(record.get("name", "---")),
-                    "score": int(str(record.get("score", 0)).strip()),
-                })
-        elif isinstance(data, list):
-            for record in data:
-                entries.append({
-                    "name": str(record.get("name", "---")),
-                    "score": int(str(record.get("score", 0)).strip()),
-                })
-        # Pad / trim to exactly 10
-        while len(entries) < 10:
-            entries.append({"name": "---", "score": 0})
-        return entries[:10]
-
-    def save(self) -> None:
-        """Persist the current leaderboard to *filepath*."""
-        data: dict[str, dict[str, object]] = {}
-        for i, entry in enumerate(self.entries):
-            data[str(i + 1)] = {"name": entry["name"], "score": entry["score"]}
+    if os.path.isfile(filepath):
         try:
-            with open(self.filepath, "w") as fh:
-                json.dump(data, fh)
-        except OSError:
+            with open(filepath) as f:
+                data = json.load(f)
+            # Normalise any stringified scores (e.g. "  500")
+            for record in data.values():
+                record["score"] = int(str(record.get("score", 0)).strip())
+            return data
+        except Exception:
             pass
+    return _default_scores()
 
-    # ── Queries ─────────────────────────────────────────────────────────
 
-    @property
-    def top_score(self) -> int:
-        """Return the highest score on the leaderboard."""
-        if not self.entries:
-            return 0
-        return int(self.entries[0].get("score", 0))
+def save_high_scores(filepath: str, high_scores: dict) -> None:
+    """Save high-scores dict to *filepath*."""
+    j = json.dumps(high_scores)
+    try:
+        with open(filepath, "w") as f:
+            f.write(j)
+    except OSError:
+        pass
 
-    def qualifies(self, score: int) -> bool:
-        """Return True if *score* would make it into the top 10."""
-        if len(self.entries) < 10:
-            return True
-        return score > int(self.entries[-1].get("score", 0))
 
-    # ── Mutations ───────────────────────────────────────────────────────
+# ── Score checking / updating ───────────────────────────────────────────────
 
-    def insert(self, name: str, score: int) -> int:
-        """Insert a new entry and return its 1-based position.
 
-        Returns 0 if the score did not qualify.
-        """
-        if not self.qualifies(score):
-            return 0
+def check_high_score(score: int, high_scores: dict) -> int:
+    """Return the 1-based position a *score* would occupy, or 0."""
+    score_pos = 0
+    for pos, record in high_scores.items():
+        if score > int(str(record["score"]).strip()) and score_pos == 0:
+            score_pos = int(pos)
+    return score_pos
 
-        new_entry = {"name": name, "score": score}
-        # Find insertion point (descending order)
-        pos = 0
-        for i, entry in enumerate(self.entries):
-            if score > int(entry.get("score", 0)):
-                pos = i
-                break
-        else:
-            pos = len(self.entries)
 
-        self.entries.insert(pos, new_entry)
-        self.entries = self.entries[:10]
-        self.save()
-        return pos + 1  # 1-based
+def update_high_scores(
+    score: int, name: str, high_scores: dict
+) -> dict:
+    """Insert *score* / *name* into *high_scores* if it qualifies.
+
+    Re-orders the dict so that lower entries shift down.  Returns the
+    (possibly modified) dict.
+    """
+    score_pos = check_high_score(score, high_scores)
+
+    if score_pos > 0:
+        max_pos = 10
+        for pos in range(max_pos, score_pos, -1):
+            if pos <= max_pos and pos > 1:
+                high_scores[str(pos)]["name"] = high_scores[str(pos - 1)]["name"]
+                high_scores[str(pos)]["score"] = high_scores[str(pos - 1)]["score"]
+        high_scores[str(score_pos)]["name"] = name
+        high_scores[str(score_pos)]["score"] = int(score)
+
+    return high_scores
+
+
+# ── Convenience queries ─────────────────────────────────────────────────────
+
+
+def get_top_score(high_scores: dict) -> int:
+    """Return the highest score from the leaderboard dict."""
+    if not high_scores:
+        return 0
+    return int(str(high_scores.get("1", {}).get("score", 0)).strip())
+
+
+# ── Internal helpers ────────────────────────────────────────────────────────
+
+
+def _default_scores() -> dict:
+    """Return a fresh default top-10 dict."""
+    return {
+        str(i): {"name": "---", "score": 0} for i in range(1, 11)
+    }
