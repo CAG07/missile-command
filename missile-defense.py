@@ -1,6 +1,6 @@
+import os
 import pygame
 #from pygame.locals import *
-#import os
 import random
 #import math
 import time
@@ -17,10 +17,25 @@ from text import InputBox
 
 # Initialize game engine, screen and clock
 pygame.init()
-try:
-    pygame.mixer.init()
-except Exception:
-    pass  # Audio unavailable; continue without sound
+
+# Try several SDL audio drivers so the mixer works inside
+# virtual-environments where the default driver may be absent.
+_mixer_ok = False
+_orig_audio_driver = os.environ.get("SDL_AUDIODRIVER")
+for _driver in [None, "pulseaudio", "alsa", "dsp", "dummy"]:
+    try:
+        if _driver is not None:
+            os.environ["SDL_AUDIODRIVER"] = _driver
+        pygame.mixer.init()
+        _mixer_ok = True
+        break
+    except Exception:
+        continue
+if not _mixer_ok:
+    if _orig_audio_driver is not None:
+        os.environ["SDL_AUDIODRIVER"] = _orig_audio_driver
+    elif "SDL_AUDIODRIVER" in os.environ:
+        del os.environ["SDL_AUDIODRIVER"]
 screen = pygame.display.set_mode(SCREENSIZE)
 pygame.mouse.set_visible(SHOW_MOUSE)
 pygame.display.set_caption(TITLE)
@@ -141,15 +156,35 @@ def main():
         
         # hold for few seconds before proceeding to high-score or back to menu or game over splash
         if current_game_state == GAME_STATE_OVER:
-            input_box = InputBox(100, 100, 140, 32)
-            while input_box.check_finished() == False:
-                for event in pygame.event.get():
-                    input_box.handle_event(event)
-                input_box.update()
-                input_box.draw(screen)
+            # Show game over message briefly
+            pygame.display.update()
+            time.sleep(2)
 
-            # Clear the screen to remove the InputBox outline before
-            # transitioning to the menu / high-scores screen.
+            # Check if the player qualifies for a high score entry
+            score_pos = check_high_score(mcgame.get_player_score(), high_scores)
+            if score_pos > 0:
+                # Player qualifies — prompt for initials
+                input_box = InputBox(100, 100, 140, 32)
+                prompt_msg = game_font.render('ENTER YOUR INITIALS:', False,
+                                              INTERFACE_SEC)
+                prompt_pos = (SCREENSIZE[0] // 2 - (prompt_msg.get_width() // 2),
+                              60)
+                while not input_box.check_finished():
+                    for event in pygame.event.get():
+                        input_box.handle_event(event)
+                    input_box.update()
+                    # Draw prompt and input box (InputBox.draw clears screen)
+                    input_box.draw(screen)
+                    screen.blit(prompt_msg, prompt_pos)
+                    pygame.display.update()
+
+                # Update and save high scores with the entered name
+                name = input_box.text if input_box.text.strip() else "---"
+                high_scores = update_high_scores(
+                    mcgame.get_player_score(), name, high_scores)
+                save_high_scores("scores.json", high_scores)
+
+            # Clear the screen before transitioning
             screen.fill(BACKGROUND)
             pygame.display.update()
                 

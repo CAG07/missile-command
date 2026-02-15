@@ -37,7 +37,10 @@ except ImportError:
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, UPDATE_RATE
 from src.game import Game, GameState
 from src.ui.audio import AudioManager, SoundEvent
-from src.ui.high_scores import load_scores, save_high_scores, update_high_scores, get_top_score
+from src.ui.high_scores import (
+    load_scores, save_high_scores, update_high_scores, get_top_score,
+    check_high_score,
+)
 
 
 # ── Constants ───────────────────────────────────────────────────────────────
@@ -319,10 +322,68 @@ class MissileCommandApp:
         if prev != GameState.GAME_OVER and self.game.state == GameState.GAME_OVER:
             self.audio.play(SoundEvent.GAME_OVER)
             score = self.game.score_display.player_score
-            self.high_scores = update_high_scores(score, "---", self.high_scores)
-            save_high_scores(self.scores_file, self.high_scores)
+            score_pos = check_high_score(score, self.high_scores)
+            if score_pos > 0:
+                name = self._prompt_initials()
+                self.high_scores = update_high_scores(score, name, self.high_scores)
+                save_high_scores(self.scores_file, self.high_scores)
         elif prev != GameState.WAVE_END and self.game.state == GameState.WAVE_END:
             self.audio.play(SoundEvent.WAVE_END)
+
+    def _prompt_initials(self) -> str:
+        """Show a text prompt and let the player type up to 3 initials.
+
+        Returns the entered string, or ``"---"`` if nothing was typed.
+        """
+        if pygame is None or self.screen is None:
+            return "---"
+
+        font_path = "data/fnt/PressStart2P-Regular.ttf"
+        try:
+            if os.path.isfile(font_path):
+                font = pygame.font.Font(font_path, 8 * self.scale)
+            else:
+                font = pygame.font.Font(None, 16 * self.scale)
+        except Exception:
+            font = pygame.font.Font(None, 16 * self.scale)
+
+        w = SCREEN_WIDTH * self.scale
+        h = SCREEN_HEIGHT * self.scale
+        color = (255, 255, 255)
+        prompt_text = "ENTER YOUR INITIALS:"
+        initials = ""
+        finished = False
+
+        while not finished:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return initials if initials.strip() else "---"
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        finished = True
+                    elif event.key == pygame.K_BACKSPACE:
+                        initials = initials[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        finished = True
+                    elif len(initials) < 3 and event.unicode.isprintable():
+                        initials += event.unicode
+
+            self.screen.fill((0, 0, 0))
+            prompt_surf = font.render(prompt_text, True, color)
+            px = w // 2 - prompt_surf.get_width() // 2
+            py = h // 2 - prompt_surf.get_height() * 2
+            self.screen.blit(prompt_surf, (px, py))
+
+            initials_surf = font.render(initials, True, color)
+            ix = w // 2 - initials_surf.get_width() // 2
+            iy = py + prompt_surf.get_height() + 8 * self.scale
+            self.screen.blit(initials_surf, (ix, iy))
+
+            pygame.display.flip()
+            self.clock.tick(UPDATE_RATE)
+
+        return initials if initials.strip() else "---"
 
     # ── Rendering ───────────────────────────────────────────────────────
 
