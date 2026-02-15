@@ -260,10 +260,10 @@ Contributions welcome! Please:
 
 ## Acknowledgments
 
-- **Dave Theurer** — Original game designer
-- **Andy McFadden** — Disassembly documentation
-- **MAME Team** — Emulation and preservation
-- **Atari, Inc.** — Original game
+- Dave Theurer — Original game designer
+- Andy McFadden — Disassembly documentation
+- MAME Team — Emulation and preservation
+- Atari — Original game
 - Based on initial work by [BekBrace](https://github.com/BekBrace)
 
 ---
