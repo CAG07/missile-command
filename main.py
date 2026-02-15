@@ -178,7 +178,11 @@ class MissileCommandApp:
 
         # Load high scores and initialise audio
         self.high_scores = load_scores(self.scores_file)
-        self.audio.init()
+        success = self.audio.init()
+        if success:
+            print("Audio system initialized successfully")
+        else:
+            print("WARNING: Audio system failed to initialize - game will run silently")
 
         # Configure game
         self.game = Game()
