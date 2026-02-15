@@ -10,7 +10,7 @@ from functions import *
 from city import City
 from missile import Missile
 from explosion import Explosion
-from defence import Defence
+from defense import Defence
 from mcgame import McGame
 from text import InputBox
 
