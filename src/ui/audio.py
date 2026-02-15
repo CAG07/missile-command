@@ -55,6 +55,10 @@ class AudioManager:
         """Initialise the mixer and load available sound files.
 
         Returns True if the mixer was initialised successfully.
+
+        When running inside a Python virtual-environment the default SDL
+        audio driver may not be detected.  We try several common drivers
+        before giving up.
         """
         if not self.enabled:
             return False
@@ -62,7 +66,22 @@ class AudioManager:
         try:
             import pygame.mixer
             if not pygame.mixer.get_init():
-                pygame.mixer.init()
+                # Try default driver first; if that fails, try common
+                # fallback drivers that work inside virtual environments.
+                drivers = [None, "pulseaudio", "alsa", "dsp", "dummy"]
+                initialized = False
+                for driver in drivers:
+                    try:
+                        if driver is not None:
+                            os.environ["SDL_AUDIODRIVER"] = driver
+                        pygame.mixer.init()
+                        initialized = True
+                        break
+                    except Exception:
+                        continue
+                if not initialized:
+                    self._initialized = False
+                    return False
             self._initialized = True
         except Exception:
             self._initialized = False

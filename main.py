@@ -120,6 +120,11 @@ class MissileCommandApp:
     irq_counter: int = 0
     color_cycle_counter: int = 0
 
+    # Crosshair position (game coordinates, for keyboard control)
+    crosshair_x: int = SCREEN_WIDTH // 2
+    crosshair_y: int = SCREEN_HEIGHT // 2
+    crosshair_speed: int = 3  # pixels per frame at game resolution
+
     # Performance tracking
     frame_times: list[float] = field(default_factory=list)
     fps: float = 0.0
@@ -220,13 +225,7 @@ class MissileCommandApp:
 
     def _get_target(self) -> tuple[int, int]:
         """Return the current crosshair target in game coordinates."""
-        if pygame is None:
-            return (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
-        try:
-            mx, my = pygame.mouse.get_pos()
-            return (mx // self.scale, my // self.scale)
-        except Exception:
-            return (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        return (self.crosshair_x, self.crosshair_y)
 
     def _fire_silo(self, silo_index: int) -> None:
         """Attempt to fire from the given silo toward the crosshair."""
@@ -239,6 +238,7 @@ class MissileCommandApp:
         """Process pygame events.
 
         Keyboard controls (MAME-style emulation):
+            Arrow Keys – move crosshair
             Left Ctrl  – fire from left silo (index 0)
             Left Alt   – fire from center silo (index 1)
             Space      – fire from right silo (index 2)
@@ -247,6 +247,7 @@ class MissileCommandApp:
             ESC        – exit game
 
         Mouse controls:
+            Mouse movement – move crosshair
             Left button   – fire from left silo (index 0)
             Middle button – fire from center silo (index 1)
             Right button  – fire from right silo (index 2)
@@ -254,6 +255,11 @@ class MissileCommandApp:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+
+            elif event.type == pygame.MOUSEMOTION:
+                mx, my = event.pos
+                self.crosshair_x = mx // self.scale
+                self.crosshair_y = my // self.scale
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -276,6 +282,18 @@ class MissileCommandApp:
                     self._fire_silo(1)      # center silo
                 elif event.button == 3:     # right click
                     self._fire_silo(2)      # right silo
+
+        # Handle held arrow keys for smooth crosshair movement
+        if pygame is not None:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                self.crosshair_x = max(0, self.crosshair_x - self.crosshair_speed)
+            if keys[pygame.K_RIGHT]:
+                self.crosshair_x = min(SCREEN_WIDTH - 1, self.crosshair_x + self.crosshair_speed)
+            if keys[pygame.K_UP]:
+                self.crosshair_y = max(0, self.crosshair_y - self.crosshair_speed)
+            if keys[pygame.K_DOWN]:
+                self.crosshair_y = min(SCREEN_HEIGHT - 1, self.crosshair_y + self.crosshair_speed)
 
     # ── IRQ simulation ──────────────────────────────────────────────────
 
