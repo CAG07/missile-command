@@ -84,6 +84,8 @@ class AudioManager:
                         else:
                             print("AudioManager: trying default driver")
 
+                        # Use specific mixer parameters for consistent
+                        # audio quality across platforms.
                         pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
                         print(f"AudioManager: SUCCESS with driver '{driver or 'default'}'")
                         print(f"AudioManager: mixer config: {pygame.mixer.get_init()}")
