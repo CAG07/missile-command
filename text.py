@@ -33,7 +33,7 @@ class InputBox:
             self.color = (255, 255, 255) if self.active else (255, 255, 255)
         if event.type == pygame.KEYDOWN:
             if event.key == K_ESCAPE:
-                    exit_game(screen)
+                    exit_game(pygame.display.get_surface())
             if self.active:
                 if event.key == pygame.K_RETURN:
                     self.finished = True
@@ -56,7 +56,6 @@ class InputBox:
         screen.blit(self.txt_surface, (self.rect.x+5, self.rect.y+5))
         # Blit the rect.
         pygame.draw.rect(screen, self.color, self.rect, 2)
-        pygame.display.update()
     
     def check_finished(self):
         return self.finished

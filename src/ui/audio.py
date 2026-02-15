@@ -80,11 +80,14 @@ class AudioManager:
                         break
                     except Exception:
                         continue
-                # Restore original environment variable
-                if original_driver is not None:
-                    os.environ["SDL_AUDIODRIVER"] = original_driver
-                elif "SDL_AUDIODRIVER" in os.environ and not initialized:
-                    del os.environ["SDL_AUDIODRIVER"]
+                # Restore original environment variable only when
+                # initialisation failed so that a working fallback
+                # driver stays active for any future re-init.
+                if not initialized:
+                    if original_driver is not None:
+                        os.environ["SDL_AUDIODRIVER"] = original_driver
+                    elif "SDL_AUDIODRIVER" in os.environ:
+                        del os.environ["SDL_AUDIODRIVER"]
                 if not initialized:
                     self._initialized = False
                     return False
