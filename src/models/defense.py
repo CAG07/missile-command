@@ -1,5 +1,5 @@
 """
-Defence silo model for Missile Command.
+Defense silo model for Missile Command.
 
 Implements the 3-silo system with per-silo ABM capacity and the
 8-simultaneous-ABM launch limit from the original arcade hardware.
@@ -23,11 +23,11 @@ from src.config import (
 from src.models.missile import ABM
 
 
-# ── Defence Silo ────────────────────────────────────────────────────────────
+# ── Defense Silo ────────────────────────────────────────────────────────────
 
 
 @dataclass
-class DefenceSilo:
+class DefenseSilo:
     """A single defensive missile silo.
 
     Properties:
@@ -79,17 +79,17 @@ class DefenceSilo:
         self.is_destroyed = True
 
 
-# ── Defence Manager ─────────────────────────────────────────────────────────
+# ── Defense Manager ─────────────────────────────────────────────────────────
 
 
 @dataclass
-class DefenceManager:
-    """Manages all 3 defence silos and enforces the 8-ABM global limit.
+class DefenseManager:
+    """Manages all 3 defense silos and enforces the 8-ABM global limit.
 
     Provides silo selection, firing validation, and wave restoration.
     """
 
-    silos: list[DefenceSilo] = field(default_factory=list)
+    silos: list[DefenseSilo] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.silos:
@@ -100,7 +100,7 @@ class DefenceManager:
         for i in range(NUM_SILOS):
             pos = SILO_POSITIONS[i]
             self.silos.append(
-                DefenceSilo(silo_index=i, position_x=pos[0], position_y=pos[1])
+                DefenseSilo(silo_index=i, position_x=pos[0], position_y=pos[1])
             )
 
     # Firing ──────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ class DefenceManager:
         """
         if current_active_abms >= MAX_ABM_SLOTS:
             return None
-        best: Optional[DefenceSilo] = None
+        best: Optional[DefenseSilo] = None
         best_dist = float("inf")
         for silo in self.silos:
             if not silo.can_fire():
@@ -165,7 +165,7 @@ class DefenceManager:
         """Total unfired ABMs across all silos."""
         return sum(s.abm_count for s in self.silos)
 
-    def get_silo(self, index: int) -> Optional[DefenceSilo]:
+    def get_silo(self, index: int) -> Optional[DefenseSilo]:
         if 0 <= index < len(self.silos):
             return self.silos[index]
         return None
