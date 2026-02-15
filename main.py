@@ -107,7 +107,7 @@ class MissileCommandApp:
     start_wave: int = 1
     tournament: bool = False
 
-    # Runtime state (initialised in ``init``)
+    # Runtime state (initialized in ``init``)
     screen: object = field(default=None, repr=False)
     clock: object = field(default=None, repr=False)
     game: Game = field(default_factory=Game)
@@ -249,11 +249,12 @@ class MissileCommandApp:
         if pygame is None or self.screen is None:
             return
         font = pygame.font.Font(None, 20)
+        from src.config import MAX_ABM_SLOTS, MAX_ICBM_SLOTS, MAX_EXPLOSION_SLOTS
         texts = [
             f"FPS: {self.fps:.1f}",
-            f"ABM: {self.game.missiles.active_abm_count}/{8}",
-            f"ICBM: {self.game.missiles.active_icbm_count}/{8}",
-            f"Explosions: {self.game.explosions.active_count}/{20}",
+            f"ABM: {self.game.missiles.active_abm_count}/{MAX_ABM_SLOTS}",
+            f"ICBM: {self.game.missiles.active_icbm_count}/{MAX_ICBM_SLOTS}",
+            f"Explosions: {self.game.explosions.active_count}/{MAX_EXPLOSION_SLOTS}",
             f"Wave: {self.game.wave_number}",
         ]
         y = 5
