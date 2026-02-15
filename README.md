@@ -102,10 +102,9 @@ missile-command/
 ## Development Roadmap
 
 - [x] Basic game mechanics
-- [ ] Implement score tracking
-- [ ] Add difficulty progression
-- [ ] Enhance sound effects
-- [ ] Create advanced enemy missile patterns
+- [x] Implement score tracking
+- [x] Enhance sound effects
+
 
 ## References
 
