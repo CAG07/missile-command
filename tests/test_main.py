@@ -106,3 +106,79 @@ class TestMissileCommandApp:
         app = MissileCommandApp(tournament=True)
         app.game.cities.bonus_threshold = 0
         assert app.game.cities.bonus_threshold == 0
+
+
+# ── Silo firing and keyboard controls (without pygame display) ──────────────
+
+
+class TestSiloFiring:
+    """Tests that the app correctly maps silo indices to game.fire_from_silo."""
+
+    def test_fire_silo_left(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app._fire_silo(0)
+        assert app.game.missiles.active_abm_count == 1
+
+    def test_fire_silo_center(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app._fire_silo(1)
+        assert app.game.missiles.active_abm_count == 1
+
+    def test_fire_silo_right(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app._fire_silo(2)
+        assert app.game.missiles.active_abm_count == 1
+
+    def test_fire_silo_noop_in_attract_mode(self):
+        app = MissileCommandApp()
+        # game starts in ATTRACT, firing should be a no-op
+        app._fire_silo(1)
+        assert app.game.missiles.active_abm_count == 0
+
+    def test_fire_all_three_silos(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app._fire_silo(0)
+        app._fire_silo(1)
+        app._fire_silo(2)
+        assert app.game.missiles.active_abm_count == 3
+
+    def test_get_target_returns_tuple(self):
+        app = MissileCommandApp()
+        target = app._get_target()
+        assert isinstance(target, tuple)
+        assert len(target) == 2
+
+
+class TestThreeSiloConfig:
+    """Tests that the src model always initializes 3 silos."""
+
+    def test_game_has_three_silos(self):
+        from src.game import Game
+        game = Game()
+        assert len(game.defenses.silos) == 3
+
+    def test_silos_at_correct_positions(self):
+        from src.game import Game
+        game = Game()
+        assert game.defenses.silos[0].position_x == 32    # left
+        assert game.defenses.silos[1].position_x == 128   # center
+        assert game.defenses.silos[2].position_x == 224   # right
+
+    def test_each_silo_starts_with_10_abms(self):
+        from src.game import Game
+        game = Game()
+        for silo in game.defenses.silos:
+            assert silo.abm_count == 10
+
+    def test_fire_from_each_silo(self):
+        from src.game import Game
+        game = Game()
+        game.start_wave()
+        assert game.fire_from_silo(0, 100, 50) is True  # left
+        assert game.fire_from_silo(1, 128, 50) is True  # center
+        assert game.fire_from_silo(2, 200, 50) is True  # right
+        assert game.missiles.active_abm_count == 3

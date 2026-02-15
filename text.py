@@ -18,7 +18,7 @@ class InputBox:
         self.color = (255, 255, 255)
         self.text = text
         self.txt_surface = game_font.render(text, True, self.color)
-        self.active = False
+        self.active = True
         self.finished = False
 
     def handle_event(self, event):
@@ -30,14 +30,13 @@ class InputBox:
             else:
                 self.active = False
             # Change the current color of the input box.
-            self.color = (255, 255, 255) if self.active else (255, 0, 255)
+            self.color = (255, 255, 255) if self.active else (255, 255, 255)
         if event.type == pygame.KEYDOWN:
             if event.key == K_ESCAPE:
                     exit_game(screen)
             if self.active:
                 if event.key == pygame.K_RETURN:
-                    print(self.text)
-                    self.text = ''
+                    self.finished = True
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
