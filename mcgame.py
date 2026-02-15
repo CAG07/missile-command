@@ -19,14 +19,14 @@ class McGame():
         self.missile_interval = 1
         self.ground_level = SCREENSIZE[1] - GROUND_LEVEL
 
-    def draw(self, screen, defence):
+    def draw(self, screen, defense):
         # draw the HUD, score, etc
         pygame.draw.line(screen, INTERFACE_PRI, [0, SKY_LEVEL], [SCREENSIZE[0], SKY_LEVEL], 2)
         pygame.draw.rect(screen, INTERFACE_PRI, (0, SCREENSIZE[1] - GROUND_LEVEL, SCREENSIZE[0], SCREENSIZE[1]))
         score_text = game_font.render('SCORE: {}'.format(self.player_score), False, INTERFACE_SEC)
         screen.blit(score_text, (5, 10))
         screen.blit(self.high_score_text, (self.high_score_text_pos, 10))
-        ammo_text = game_font.render('AMMO: {}'.format(defence.get_ammo()), False, INTERFACE_SEC)
+        ammo_text = game_font.render('AMMO: {}'.format(defense.get_ammo()), False, INTERFACE_SEC)
         screen.blit(ammo_text, (SCREENSIZE[0] // 2 - (ammo_text.get_width() // 2), 10))
         # TBC - draw the remaining ammo
 
@@ -54,7 +54,7 @@ class McGame():
         return GAME_STATE_RUNNING
 
     # start new level
-    def new_level(self, screen, defence):
+    def new_level(self, screen, defense):
         # set new level difficulty parameters
         self.max_missile_count += self.difficulty_increment
         self.missile_count = 0
@@ -62,7 +62,7 @@ class McGame():
         self.difficulty_increment += self.difficulty
         self.missile_frequency = self.missile_loop - self.difficulty
         self.missile_interval = 1
-        defence.set_ammo(30)
+        defense.set_ammo(30)
 
 
         # display prompt for next level and give short pause

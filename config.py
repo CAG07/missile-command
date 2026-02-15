@@ -29,7 +29,7 @@ GROUND_LEVEL            = 20
 # Define colours
 BACKGROUND              = (0, 0, 0)
 GROUND                  = (69, 139, 81)         # 458b51
-DEFENCE                 = (48, 117, 213)        # 3075D5
+DEFENSE                 = (48, 117, 213)        # 3075D5
 CITY                    = (255, 211, 24)        # FFD318
 WARHEAD                 = (255, 0, 0)           # FF0000
 WARHEAD_TRAIL           = (204, 39, 36)         # CC2724
