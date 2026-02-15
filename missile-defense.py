@@ -10,7 +10,7 @@ from functions import *
 from city import City
 from missile import Missile
 from explosion import Explosion
-from defence import Defence
+from defense import Defense
 from mcgame import McGame
 from text import InputBox
 
@@ -40,13 +40,13 @@ def main():
     # TBC - generate the cities
     # need to be replaced with working cities
     city_list = []
-    for i in range(1, 8):   # 8 == Max num cities plus defence plus one
+    for i in range(1, 8):   # 8 == Max num cities plus defense plus one
         if i == 8 // 2:     # find centre point for gun
             pass
         else:
             city_list.append(City(i, 7))   # 7 == max num cities plus guns
     # Intercepter gun
-    defence = Defence()
+    defense = Defense()
 
     # set the game running
     current_game_state = GAME_STATE_RUNNING
@@ -62,7 +62,7 @@ def main():
             if event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
                     # primary mouse button
-                    defence.shoot(missile_list)
+                    defense.shoot(missile_list)
                 if event.button == 2:
                     # middle mouse button
                     pass
@@ -73,7 +73,7 @@ def main():
                 if event.key == K_ESCAPE:
                     exit_game(screen)
                 if event.key == K_SPACE:
-                    defence.shoot(missile_list)
+                    defense.shoot(missile_list)
                 if event.key == K_p:
                     pause_game(screen)
             if event.type == KEYUP:
@@ -89,8 +89,8 @@ def main():
             city.draw(screen)
         
         # --- interceptor turret
-        defence.update()
-        defence.draw(screen)
+        defense.update()
+        defense.draw(screen)
         
         # --- missiles
         for missile in missile_list[:]:
@@ -107,7 +107,7 @@ def main():
                 explosion_list.remove(explosion)
 
         # --- Draw the interface 
-        mcgame.draw(screen, defence)
+        mcgame.draw(screen, defense)
 
         # --- update game mcgame
         if current_game_state == GAME_STATE_RUNNING:
@@ -119,7 +119,7 @@ def main():
 
         # load a message and set new game values for start new level
         if current_game_state == GAME_STATE_NEW_LEVEL:
-            mcgame.new_level(screen, defence)
+            mcgame.new_level(screen, defense)
         
         # Update the display
         pygame.display.update()
