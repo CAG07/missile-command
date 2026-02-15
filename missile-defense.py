@@ -90,15 +90,7 @@ def main():
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     exit_game(screen)
-                if event.key == K_LCTRL:
-                    # Left Ctrl -> left silo
-                    defense.shoot(missile_list, silo_index=0)
-                if event.key == K_LALT:
-                    # Left Alt -> center silo
-                    defense.shoot(missile_list, silo_index=1)
-                if event.key == K_SPACE:
-                    # Space -> right silo
-                    defense.shoot(missile_list, silo_index=2)
+
                 if event.key == K_p:
                     pause_game(screen)
             if event.type == KEYUP:

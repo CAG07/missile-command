@@ -37,12 +37,7 @@ python missile-defense.py
 
 ## Controls
 
-### Keyboard (Default)
-- **Arrow Keys**: Move crosshairs
-- **Left Ctrl**: Fire from left silo
-- **Left Alt**: Fire from center silo
-- **Space**: Fire from right silo
-- **5**: Insert coin
+### Keyboard
 - **1**: Start 1-player game
 - **P**: Pause/Unpause
 - **ESC**: Exit game

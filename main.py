@@ -123,10 +123,9 @@ class MissileCommandApp:
     irq_counter: int = 0
     color_cycle_counter: int = 0
 
-    # Crosshair position (game coordinates, for keyboard control)
+    # Crosshair position (game coordinates, updated by mouse)
     crosshair_x: int = SCREEN_WIDTH // 2
     crosshair_y: int = SCREEN_HEIGHT // 2
-    crosshair_speed: int = 3  # pixels per frame at game resolution
 
     # Performance tracking
     frame_times: list[float] = field(default_factory=list)
@@ -244,13 +243,8 @@ class MissileCommandApp:
     def _handle_events(self) -> None:
         """Process pygame events.
 
-        Keyboard controls (MAME-style emulation):
-            Arrow Keys – move crosshair
-            Left Ctrl  – fire from left silo (index 0)
-            Left Alt   – fire from center silo (index 1)
-            Space      – fire from right silo (index 2)
+        Keyboard controls:
             1          – start 1-player game
-            P          – pause / unpause
             ESC        – exit game
 
         Mouse controls:
@@ -275,12 +269,6 @@ class MissileCommandApp:
                     # Start game from attract mode
                     if self.game.state == GameState.ATTRACT:
                         self.game.start_wave()
-                elif event.key == pygame.K_LCTRL:
-                    self._fire_silo(0)  # left silo
-                elif event.key == pygame.K_LALT:
-                    self._fire_silo(1)  # center silo
-                elif event.key == pygame.K_SPACE:
-                    self._fire_silo(2)  # right silo
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:       # left click
@@ -290,17 +278,6 @@ class MissileCommandApp:
                 elif event.button == 3:     # right click
                     self._fire_silo(2)      # right silo
 
-        # Handle held arrow keys for smooth crosshair movement
-        if pygame is not None:
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_LEFT]:
-                self.crosshair_x = max(0, self.crosshair_x - self.crosshair_speed)
-            if keys[pygame.K_RIGHT]:
-                self.crosshair_x = min(SCREEN_WIDTH - 1, self.crosshair_x + self.crosshair_speed)
-            if keys[pygame.K_UP]:
-                self.crosshair_y = max(0, self.crosshair_y - self.crosshair_speed)
-            if keys[pygame.K_DOWN]:
-                self.crosshair_y = min(SCREEN_HEIGHT - 1, self.crosshair_y + self.crosshair_speed)
 
     # ── IRQ simulation ──────────────────────────────────────────────────
 

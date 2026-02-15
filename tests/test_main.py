@@ -185,11 +185,11 @@ class TestThreeSiloConfig:
         assert game.missiles.active_abm_count == 3
 
 
-# ── Crosshair / arrow key controls ────────────────────────────────────────
+# ── Crosshair / mouse controls ────────────────────────────────────────
 
 
 class TestCrosshair:
-    """Tests that crosshair position tracking and arrow key clamping work."""
+    """Tests that crosshair position tracking works."""
 
     def test_initial_crosshair_position(self):
         app = MissileCommandApp()
@@ -201,34 +201,6 @@ class TestCrosshair:
         app.crosshair_x = 50
         app.crosshair_y = 80
         assert app._get_target() == (50, 80)
-
-    def test_crosshair_left_clamps_at_zero(self):
-        app = MissileCommandApp()
-        app.crosshair_x = 1
-        app.crosshair_x = max(0, app.crosshair_x - app.crosshair_speed)
-        assert app.crosshair_x == 0
-
-    def test_crosshair_right_clamps_at_max(self):
-        app = MissileCommandApp()
-        app.crosshair_x = SCREEN_WIDTH - 2
-        app.crosshair_x = min(SCREEN_WIDTH - 1, app.crosshair_x + app.crosshair_speed)
-        assert app.crosshair_x == SCREEN_WIDTH - 1
-
-    def test_crosshair_up_clamps_at_zero(self):
-        app = MissileCommandApp()
-        app.crosshair_y = 1
-        app.crosshair_y = max(0, app.crosshair_y - app.crosshair_speed)
-        assert app.crosshair_y == 0
-
-    def test_crosshair_down_clamps_at_max(self):
-        app = MissileCommandApp()
-        app.crosshair_y = SCREEN_HEIGHT - 2
-        app.crosshair_y = min(SCREEN_HEIGHT - 1, app.crosshair_y + app.crosshair_speed)
-        assert app.crosshair_y == SCREEN_HEIGHT - 1
-
-    def test_crosshair_speed_default(self):
-        app = MissileCommandApp()
-        assert app.crosshair_speed == 3
 
     def test_fire_uses_crosshair_position(self):
         app = MissileCommandApp()
