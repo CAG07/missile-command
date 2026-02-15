@@ -41,7 +41,7 @@ from src.models.explosion import (
     point_in_octagon,
 )
 from src.models.city import City, CityManager
-from src.models.defence import DefenceManager, DefenceSilo
+from src.models.defense import DefenseManager, DefenseSilo
 from src.game import Game, GameState
 from src.ui.text import ScoreDisplay
 from src.utils.functions import (
@@ -497,32 +497,32 @@ class TestCityManager:
         assert mgr.bonus_cities == 0
 
 
-# ── Defence ─────────────────────────────────────────────────────────────────
+# ── Defense ─────────────────────────────────────────────────────────────────
 
 
-class TestDefenceSilo:
+class TestDefenseSilo:
     def test_initial_capacity(self):
-        silo = DefenceSilo(silo_index=0, position_x=32, position_y=220)
+        silo = DefenseSilo(silo_index=0, position_x=32, position_y=220)
         assert silo.abm_count == SILO_CAPACITY
 
     def test_fire_decrements(self):
-        silo = DefenceSilo(silo_index=1, position_x=128, position_y=220)
+        silo = DefenseSilo(silo_index=1, position_x=128, position_y=220)
         abm = silo.fire(100, 50)
         assert abm is not None
         assert silo.abm_count == SILO_CAPACITY - 1
 
     def test_fire_empty_returns_none(self):
-        silo = DefenceSilo(silo_index=0, position_x=32, position_y=220,
+        silo = DefenseSilo(silo_index=0, position_x=32, position_y=220,
                            abm_count=0)
         assert silo.fire(100, 50) is None
 
     def test_destroyed_cannot_fire(self):
-        silo = DefenceSilo(silo_index=0, position_x=32, position_y=220)
+        silo = DefenseSilo(silo_index=0, position_x=32, position_y=220)
         silo.destroy()
         assert silo.fire(100, 50) is None
 
     def test_restore(self):
-        silo = DefenceSilo(silo_index=0, position_x=32, position_y=220,
+        silo = DefenseSilo(silo_index=0, position_x=32, position_y=220,
                            abm_count=0)
         silo.destroy()
         silo.restore()
@@ -530,27 +530,27 @@ class TestDefenceSilo:
         assert not silo.is_destroyed
 
 
-class TestDefenceManager:
+class TestDefenseManager:
     def test_three_silos(self):
-        mgr = DefenceManager()
+        mgr = DefenseManager()
         assert len(mgr.silos) == 3
 
     def test_fire_respects_abm_limit(self):
-        mgr = DefenceManager()
+        mgr = DefenseManager()
         assert mgr.fire(1, 100, 50, MAX_ABM_SLOTS) is None
 
     def test_fire_nearest(self):
-        mgr = DefenceManager()
+        mgr = DefenseManager()
         abm = mgr.fire_nearest(40, 50, 0)
         assert abm is not None
         assert abm.silo_index == 0  # left silo is nearest to x=40
 
     def test_total_abm_count(self):
-        mgr = DefenceManager()
+        mgr = DefenseManager()
         assert mgr.total_abm_count == SILO_CAPACITY * 3
 
     def test_restore_all(self):
-        mgr = DefenceManager()
+        mgr = DefenseManager()
         mgr.silos[0].fire(100, 50)
         mgr.silos[1].destroy()
         mgr.restore_all()

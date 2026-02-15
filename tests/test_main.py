@@ -2,9 +2,20 @@
 Tests for main.py – application initialization and argument parsing.
 """
 
+import os
 import pytest
 
 from main import parse_args, MissileCommandApp, FRAME_TIME, IRQ_PER_FRAME
+
+
+# ── Entry point validation ─────────────────────────────────────────────────
+
+
+class TestEntryPoint:
+    def test_missile_defense_py_exists(self):
+        """missile-defense.py must exist as the game entry point."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        assert os.path.isfile(os.path.join(root, "missile-defense.py"))
 
 
 # ── Argument parsing ───────────────────────────────────────────────────────

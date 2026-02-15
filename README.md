@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ### Run
 ```bash
-python main.py
+python missile-defense.py
 ```
 
 ## Controls
@@ -87,7 +87,7 @@ Defend your cities from incoming ICBMs, bombers, satellites, and smart bombs. Th
 
 ## Command Line Options
 ```bash
-python main.py [OPTIONS]
+python missile-defense.py [OPTIONS]
 
 Options:
   --fullscreen         Launch in fullscreen mode
@@ -159,7 +159,7 @@ missile-command/
 │   │   ├── missile.py      # ABM, ICBM, SmartBomb, Flier classes
 │   │   ├── explosion.py    # Explosion system
 │   │   ├── city.py         # City and bonus management
-│   │   └── defence.py      # Silo management
+│   │   └── defense.py      # Silo management
 │   ├── utils/
 │   │   ├── functions.py    # Math and utility functions
 │   │   └── input_handler.py # Input processing
@@ -170,7 +170,7 @@ missile-command/
 │   ├── img/                # Sprites and graphics
 │   └── sfx/                # Sound effects
 ├── tests/                  # Unit tests
-├── main.py                 # Application entry point
+├── missile-defense.py      # Application entry point
 ├── requirements.txt        # Python dependencies
 └── README.md              # This file
 ```
@@ -191,7 +191,7 @@ pytest --cov=src tests/
 
 ### Debug Mode
 ```bash
-python main.py --debug
+python missile-defense.py --debug
 ```
 
 Shows:

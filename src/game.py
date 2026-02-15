@@ -3,7 +3,7 @@ Core game logic for Missile Command.
 
 Orchestrates game state, score tracking, wave management, and
 integrates all model subsystems (missiles, explosions, cities,
-defences).
+defenses).
 
 References:
     - Missile Command Disassembly.pdf
@@ -25,7 +25,7 @@ from src.config import (
     WAVE_SPEEDS,
 )
 from src.models.city import CityManager
-from src.models.defence import DefenceManager
+from src.models.defense import DefenseManager
 from src.models.explosion import ExplosionManager
 from src.models.missile import (
     ABM,
@@ -66,7 +66,7 @@ class Game:
     missiles: MissileSlotManager = field(default_factory=MissileSlotManager)
     explosions: ExplosionManager = field(default_factory=ExplosionManager)
     cities: CityManager = field(default_factory=CityManager)
-    defences: DefenceManager = field(default_factory=DefenceManager)
+    defenses: DefenseManager = field(default_factory=DefenseManager)
     score_display: ScoreDisplay = field(default_factory=ScoreDisplay)
 
     # Wave tracking
@@ -76,9 +76,9 @@ class Game:
     # ── Wave lifecycle ──────────────────────────────────────────────────
 
     def start_wave(self) -> None:
-        """Begin a new wave: restore defences, cities, reset counters."""
+        """Begin a new wave: restore defenses, cities, reset counters."""
         self.state = GameState.RUNNING
-        self.defences.restore_all()
+        self.defenses.restore_all()
         self.cities.start_wave()
         self.missiles.reset()
         self.explosions.reset()
@@ -93,7 +93,7 @@ class Game:
         """End the current wave and return bonus score."""
         bonus = calculate_wave_bonus(
             self.cities.active_count,
-            self.defences.total_abm_count,
+            self.defenses.total_abm_count,
         )
         self.score_display.add(bonus)
         self.cities.check_bonus(self.score_display.player_score)
@@ -178,7 +178,7 @@ class Game:
         self, silo_index: int, target_x: int, target_y: int
     ) -> bool:
         """Attempt to fire an ABM from the specified silo."""
-        abm = self.defences.fire(
+        abm = self.defenses.fire(
             silo_index, target_x, target_y,
             self.missiles.active_abm_count,
         )
@@ -188,7 +188,7 @@ class Game:
 
     def fire_nearest(self, target_x: int, target_y: int) -> bool:
         """Fire from whichever silo is nearest to the target."""
-        abm = self.defences.fire_nearest(
+        abm = self.defenses.fire_nearest(
             target_x, target_y,
             self.missiles.active_abm_count,
         )

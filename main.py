@@ -5,7 +5,7 @@ Initializes pygame, sets up the 60Hz game loop, and manages the
 overall application lifecycle matching the original arcade's timing.
 
 Usage:
-    python main.py [OPTIONS]
+    python missile-defense.py [OPTIONS]
 
 Options:
     --fullscreen         Launch in fullscreen mode
