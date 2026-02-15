@@ -173,7 +173,7 @@ def main():
                     for event in pygame.event.get():
                         input_box.handle_event(event)
                     input_box.update()
-                    # Draw prompt and input box (InputBox.draw clears screen)
+                    # Draw input box then prompt; caller handles display update
                     input_box.draw(screen)
                     screen.blit(prompt_msg, prompt_pos)
                     pygame.display.update()

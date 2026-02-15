@@ -366,7 +366,7 @@ class MissileCommandApp:
                         initials = initials[:-1]
                     elif event.key == pygame.K_ESCAPE:
                         finished = True
-                    elif len(initials) < 3 and event.unicode.isprintable():
+                    elif len(initials) < 3 and event.unicode.isalnum():
                         initials += event.unicode
 
             self.screen.fill((0, 0, 0))
