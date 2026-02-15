@@ -218,14 +218,64 @@ class MissileCommandApp:
 
     # ── Event handling ──────────────────────────────────────────────────
 
+    def _get_target(self) -> tuple[int, int]:
+        """Return the current crosshair target in game coordinates."""
+        if pygame is None:
+            return (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        try:
+            mx, my = pygame.mouse.get_pos()
+            return (mx // self.scale, my // self.scale)
+        except Exception:
+            return (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+
+    def _fire_silo(self, silo_index: int) -> None:
+        """Attempt to fire from the given silo toward the crosshair."""
+        if self.game.state != GameState.RUNNING:
+            return
+        tx, ty = self._get_target()
+        self.game.fire_from_silo(silo_index, tx, ty)
+
     def _handle_events(self) -> None:
-        """Process pygame events."""
+        """Process pygame events.
+
+        Keyboard controls (matching original arcade via MAME):
+            Left Ctrl  – fire from left silo (index 0)
+            Left Alt   – fire from center silo (index 1)
+            Space      – fire from right silo (index 2)
+            1          – start 1-player game
+            P          – pause / unpause
+            ESC        – exit game
+
+        Mouse controls:
+            Left button   – fire from left silo (index 0)
+            Middle button – fire from center silo (index 1)
+            Right button  – fire from right silo (index 2)
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                elif event.key == pygame.K_1:
+                    # Start game from attract mode
+                    if self.game.state == GameState.ATTRACT:
+                        self.game.start_wave()
+                elif event.key == pygame.K_LCTRL:
+                    self._fire_silo(0)  # left silo
+                elif event.key == pygame.K_LALT:
+                    self._fire_silo(1)  # center silo
+                elif event.key == pygame.K_SPACE:
+                    self._fire_silo(2)  # right silo
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:       # left click
+                    self._fire_silo(0)      # left silo
+                elif event.button == 2:     # middle click
+                    self._fire_silo(1)      # center silo
+                elif event.button == 3:     # right click
+                    self._fire_silo(2)      # right silo
 
     # ── IRQ simulation ──────────────────────────────────────────────────
 

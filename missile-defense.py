@@ -61,19 +61,26 @@ def main():
         for event in pygame.event.get():
             if event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    # primary mouse button
-                    defense.shoot(missile_list)
+                    # left mouse button -> left silo
+                    defense.shoot(missile_list, silo_index=0)
                 if event.button == 2:
-                    # middle mouse button
-                    pass
+                    # middle mouse button -> center silo
+                    defense.shoot(missile_list, silo_index=1)
                 if event.button == 3:
-                    # right mouse button
-                    pass
+                    # right mouse button -> right silo
+                    defense.shoot(missile_list, silo_index=2)
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     exit_game(screen)
+                if event.key == K_LCTRL:
+                    # Left Ctrl -> left silo
+                    defense.shoot(missile_list, silo_index=0)
+                if event.key == K_LALT:
+                    # Left Alt -> center silo
+                    defense.shoot(missile_list, silo_index=1)
                 if event.key == K_SPACE:
-                    defense.shoot(missile_list)
+                    # Space -> right silo
+                    defense.shoot(missile_list, silo_index=2)
                 if event.key == K_p:
                     pause_game(screen)
             if event.type == KEYUP:
