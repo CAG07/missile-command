@@ -2,7 +2,7 @@
 
 A faithful recreation of the 1980 Atari arcade game **Missile Command**.
 
-![Game Screenshot](Missile_Command.png)
+![Game Screenshot](missile-command-arcade.gif)
 
 ## Overview
 
