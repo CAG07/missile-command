@@ -13,3 +13,4 @@ pytest-cov>=4.0.0
 
 # Code quality
 flake8>=6.0.0
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
