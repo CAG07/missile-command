@@ -95,13 +95,24 @@ class TestCityUnit:
         mgr = CityManager()
         assert mgr.active_count == 6
 
-    def test_cities_restored_at_wave_start(self):
+    def test_cities_persist_across_wave_start(self):
+        """Destroyed cities stay destroyed; only silos restore per wave."""
         mgr = CityManager()
         mgr.destroy_city(0)
         mgr.destroy_city(1)
         mgr.start_wave()
-        assert mgr.active_count == 6
+        assert mgr.active_count == 4
         assert mgr.cities_destroyed_this_wave == 0
+
+    def test_try_repair_craters_uses_banked_bonus(self):
+        mgr = CityManager()
+        mgr.destroy_city(0)
+        mgr.destroy_city(1)
+        mgr.bonus_cities = 1
+        repaired = mgr.try_repair_craters()
+        assert repaired == 1
+        assert mgr.active_count == 5
+        assert mgr.bonus_cities == 0
 
     def test_destruction_limited_to_3(self):
         mgr = CityManager()

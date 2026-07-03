@@ -92,10 +92,13 @@ class CityManager:
     # Wave lifecycle ──────────────────────────────────────────────────────
 
     def start_wave(self) -> None:
-        """Restore cities and reset the per-wave destruction counter."""
+        """Reset the per-wave destruction counter.
+
+        Cities destroyed in prior waves stay destroyed -- only silos
+        are fully restored each wave. A destroyed city only comes back
+        by spending a banked bonus city (see ``replace_random_crater``).
+        """
         self.cities_destroyed_this_wave = 0
-        for city in self.cities:
-            city.restore()
 
     # Destruction ─────────────────────────────────────────────────────────
 
@@ -164,6 +167,16 @@ class CityManager:
         self.cities[idx].restore()
         self.bonus_cities = (self.bonus_cities - 1) & 0xFF
         return True
+
+    def try_repair_craters(self) -> int:
+        """Spend banked bonus cities to patch craters, while both exist.
+
+        Returns the number of craters repaired.
+        """
+        repaired = 0
+        while self.replace_random_crater():
+            repaired += 1
+        return repaired
 
     # Queries ─────────────────────────────────────────────────────────────
 

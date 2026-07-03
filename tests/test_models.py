@@ -47,6 +47,7 @@ from src.ui.text import ScoreDisplay
 from src.utils.functions import (
     calculate_wave_bonus,
     get_attack_pace_altitude,
+    get_score_multiplier,
     get_wave_speed,
 )
 
@@ -467,12 +468,14 @@ class TestCityManager:
                 destroyed += 1
         assert destroyed == MAX_CITIES_DESTROYED_PER_WAVE
 
-    def test_start_wave_restores(self):
+    def test_start_wave_persists_destroyed_cities(self):
+        """Destroyed cities stay destroyed across waves; only the
+        per-wave destruction counter resets."""
         mgr = CityManager()
         mgr.destroy_city(0)
         mgr.destroy_city(1)
         mgr.start_wave()
-        assert mgr.active_count == 6
+        assert mgr.active_count == 4
         assert mgr.cities_destroyed_this_wave == 0
 
     def test_bonus_city_award(self):
@@ -615,6 +618,24 @@ class TestWaveHelpers:
     def test_calculate_wave_bonus(self):
         bonus = calculate_wave_bonus(surviving_cities=4, remaining_abms=10)
         assert bonus == 4 * 100 + 10 * 5  # 450
+
+    def test_calculate_wave_bonus_with_multiplier(self):
+        bonus = calculate_wave_bonus(surviving_cities=4, remaining_abms=10, multiplier=3)
+        assert bonus == (4 * 100 + 10 * 5) * 3
+
+    def test_score_multiplier_schedule(self):
+        assert get_score_multiplier(1) == 1
+        assert get_score_multiplier(2) == 1
+        assert get_score_multiplier(3) == 2
+        assert get_score_multiplier(4) == 2
+        assert get_score_multiplier(5) == 3
+        assert get_score_multiplier(6) == 3
+        assert get_score_multiplier(7) == 4
+        assert get_score_multiplier(8) == 4
+        assert get_score_multiplier(9) == 5
+        assert get_score_multiplier(10) == 5
+        assert get_score_multiplier(11) == 6
+        assert get_score_multiplier(50) == 6
 
 
 # ── Game integration ────────────────────────────────────────────────────────

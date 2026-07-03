@@ -5,8 +5,15 @@ Tests for main.py – application initialization and argument parsing.
 import os
 import pytest
 
-from main import parse_args, MissileCommandApp, FRAME_TIME, IRQ_PER_FRAME
-from src.config import SCREEN_WIDTH, SCREEN_HEIGHT
+from main import (
+    parse_args,
+    MissileCommandApp,
+    FRAME_TIME,
+    IRQ_PER_FRAME,
+    TALLY_TICK_INTERVAL_FRAMES,
+)
+from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, WAVE_END_DISPLAY_FRAMES
+from src.game import GameState
 
 
 # ── Entry point validation ─────────────────────────────────────────────────
@@ -209,3 +216,51 @@ class TestCrosshair:
         app.crosshair_y = 50
         app._fire_silo(1)
         assert app.game.missiles.active_abm_count == 1
+
+
+# ── Wave-end tally screen ────────────────────────────────────────────────
+
+
+class TestTallyScreen:
+    """Tests for the count-up tally shown between waves."""
+
+    def test_displayed_score_before_any_wave_end(self):
+        app = MissileCommandApp()
+        assert app.tally_displayed_score == app.game.score_display.player_score
+
+    def test_ticks_total_set_on_wave_end_transition(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app.game.icbms_remaining_this_wave = 0
+        app._update()  # RUNNING -> WAVE_END
+        expected = (
+            app.game.last_wave_surviving_cities + app.game.last_wave_remaining_abms
+        )
+        assert app.tally_ticks_total == expected
+        assert app.tally_ticks_done == 0
+
+    def test_ticks_progress_and_score_counts_up(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app.game.icbms_remaining_this_wave = 0
+        app._update()  # RUNNING -> WAVE_END
+        start_score = app.tally_displayed_score
+        for _ in range(app.tally_ticks_total * TALLY_TICK_INTERVAL_FRAMES):
+            app._update()
+        assert app.tally_ticks_done == app.tally_ticks_total
+        assert app.tally_displayed_score == app.game.score_display.player_score
+        assert app.tally_displayed_score >= start_score
+
+    def test_advances_to_next_wave_after_display_timer(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        wave_before = app.game.wave_number
+        app.game.icbms_remaining_this_wave = 0
+        app._update()  # RUNNING -> WAVE_END; wave_number already incremented
+        assert app.game.wave_number == wave_before + 1
+        for _ in range(WAVE_END_DISPLAY_FRAMES + 1):
+            app._update()
+        # start_wave() fires once the tally timer expires, re-entering
+        # RUNNING for the same (already incremented) wave number.
+        assert app.game.wave_number == wave_before + 1
+        assert app.game.state == GameState.RUNNING

@@ -69,16 +69,26 @@ def get_attack_pace_altitude(wave_number: int) -> int:
 # ── Scoring helpers ─────────────────────────────────────────────────────────
 
 
+def get_score_multiplier(wave_number: int) -> int:
+    """Return the scoring multiplier for *wave_number*.
+
+    1x on waves 1-2, 2x on 3-4, 3x on 5-6, 4x on 7-8, 5x on 9-10,
+    6x from wave 11 onward.
+    """
+    return min((max(wave_number, 1) + 1) // 2, 6)
+
+
 def calculate_wave_bonus(
     surviving_cities: int,
     remaining_abms: int,
+    multiplier: int = 1,
 ) -> int:
     """Calculate end-of-wave bonus score.
 
-    Points for surviving cities and remaining ABMs, matching the
-    original arcade scoring.
+    Points for surviving cities and remaining ABMs, scaled by the
+    current scoring multiplier, matching the original arcade scoring.
     """
     return (
         surviving_cities * POINTS_PER_SURVIVING_CITY
         + remaining_abms * POINTS_PER_REMAINING_ABM
-    )
+    ) * multiplier

@@ -60,6 +60,7 @@ COLOR_CYCLE_IRQS: int = 8                       # 30 Hz color cycling
 
 MIN_SCALE: int = 1
 MAX_SCALE: int = 4
+TALLY_TICK_INTERVAL_FRAMES: int = 4  # frames between each tally count-up tick
 
 SILO_KEYS: dict[int, int] = {}  # populated lazily once pygame is available
 
@@ -150,6 +151,9 @@ class MissileCommandApp:
 
     # Wave-end tally display countdown (frames)
     wave_end_timer: int = 0
+    tally_ticks_total: int = 0
+    tally_ticks_done: int = 0
+    tally_tick_frame_counter: int = 0
 
     # Performance tracking
     frame_times: list[float] = field(default_factory=list)
@@ -353,11 +357,31 @@ class MissileCommandApp:
         elif prev != GameState.WAVE_END and self.game.state == GameState.WAVE_END:
             self.audio.play(SoundEvent.WAVE_END)
             self.wave_end_timer = WAVE_END_DISPLAY_FRAMES
+            self.tally_ticks_total = (
+                self.game.last_wave_surviving_cities + self.game.last_wave_remaining_abms
+            )
+            self.tally_ticks_done = 0
+            self.tally_tick_frame_counter = 0
 
         elif self.game.state == GameState.WAVE_END:
             self.wave_end_timer -= 1
+            if self.tally_ticks_done < self.tally_ticks_total:
+                self.tally_tick_frame_counter += 1
+                if self.tally_tick_frame_counter >= TALLY_TICK_INTERVAL_FRAMES:
+                    self.tally_tick_frame_counter = 0
+                    self.tally_ticks_done += 1
+                    self.audio.play(SoundEvent.TALLY_TICK)
             if self.wave_end_timer <= 0:
                 self.game.start_wave()
+
+    @property
+    def tally_displayed_score(self) -> int:
+        """Score shown on the tally screen, counting up tick by tick."""
+        base = self.game.score_display.player_score - self.game.last_wave_bonus
+        if self.tally_ticks_total <= 0:
+            return self.game.score_display.player_score
+        fraction = self.tally_ticks_done / self.tally_ticks_total
+        return base + round(self.game.last_wave_bonus * fraction)
 
     def _reset_to_attract(self) -> None:
         """Start a fresh game in attract mode after a game over."""
@@ -456,8 +480,16 @@ class MissileCommandApp:
         self._center_text(self.game.score_display.format_high_score(), 8, 140)
 
     def _render_wave_end(self) -> None:
-        self._center_text(f"WAVE {self.game.wave_number - 1} COMPLETE", 8, 90)
-        self._center_text(f"BONUS {self.game.last_wave_bonus}", 8, 110)
+        mult = self.game.multiplier
+        self._center_text(f"WAVE {self.game.wave_number - 1} COMPLETE", 8, 50)
+        self._center_text(
+            f"CITIES {self.game.last_wave_surviving_cities} X 100 X {mult}", 7, 90,
+        )
+        self._center_text(
+            f"ABMS {self.game.last_wave_remaining_abms} X 5 X {mult}", 7, 105,
+        )
+        self._center_text(f"BONUS {self.game.last_wave_bonus}", 8, 125)
+        self._center_text(f"SCORE {self.tally_displayed_score}", 8, 150)
 
     def _render_game_over(self) -> None:
         self._center_text("THE END", 10, 90)

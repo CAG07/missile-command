@@ -50,6 +50,7 @@ from src.utils.functions import (
     calculate_wave_bonus,
     distance_approx,
     get_attack_pace_altitude,
+    get_score_multiplier,
     get_wave_speed,
 )
 
@@ -91,6 +92,8 @@ class Game:
     flier_spawn_timer: int = 0
     flier_fire_cooldown: int = 0
     last_wave_bonus: int = 0
+    last_wave_surviving_cities: int = 0
+    last_wave_remaining_abms: int = 0
 
     # ── Wave lifecycle ──────────────────────────────────────────────────
 
@@ -110,15 +113,24 @@ class Game:
         """Determine how many ICBMs to launch this wave."""
         return min(8 + self.wave_number * 2, 30)
 
+    @property
+    def multiplier(self) -> int:
+        """Current scoring multiplier (1x-6x, based on wave number)."""
+        return get_score_multiplier(self.wave_number)
+
     def end_wave(self) -> int:
         """End the current wave and return bonus score."""
+        self.last_wave_surviving_cities = self.cities.active_count
+        self.last_wave_remaining_abms = self.defenses.total_abm_count
         bonus = calculate_wave_bonus(
-            self.cities.active_count,
-            self.defenses.total_abm_count,
+            self.last_wave_surviving_cities,
+            self.last_wave_remaining_abms,
+            self.multiplier,
         )
         self.score_display.add(bonus)
         self.last_wave_bonus = bonus
         self.cities.check_bonus(self.score_display.player_score)
+        self.cities.try_repair_craters()
         self.wave_number += 1
         self.state = GameState.WAVE_END
         return bonus
@@ -171,7 +183,7 @@ class Game:
                     if isinstance(slot, SmartBomb)
                     else POINTS_PER_ICBM
                 )
-                self.score_display.add(pts)
+                self.score_display.add(pts * self.multiplier)
                 slot.deactivate()
 
         # 8. Collision: explosions vs flier.
@@ -179,12 +191,14 @@ class Game:
         if flier is not None and flier.is_active:
             for exp in updated_explosions:
                 if exp.collides_with(flier.current_x, flier.altitude):
-                    self.score_display.add(POINTS_PER_FLIER)
+                    self.score_display.add(POINTS_PER_FLIER * self.multiplier)
                     flier.deactivate()
                     break
 
-        # 9. Bonus cities.
+        # 9. Bonus cities: award new ones, then spend banked ones to
+        #    patch any craters immediately.
         self.cities.check_bonus(self.score_display.player_score)
+        self.cities.try_repair_craters()
 
         # 10. Game-over check.
         if self.cities.all_destroyed:

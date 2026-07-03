@@ -22,6 +22,7 @@ class SoundEvent(Enum):
     GAME_OVER = auto()
     WAVE_END = auto()
     BONUS_CITY = auto()
+    TALLY_TICK = auto()
 
 
 # Map each event to its .wav file name inside data/sfx/
@@ -33,6 +34,7 @@ _SOUND_FILES: dict[SoundEvent, str] = {
     SoundEvent.GAME_OVER: "game_over.wav",
     SoundEvent.WAVE_END: "wave_end.wav",
     SoundEvent.BONUS_CITY: "bonus_city.wav",
+    SoundEvent.TALLY_TICK: "tally_tick.wav",
 }
 
 

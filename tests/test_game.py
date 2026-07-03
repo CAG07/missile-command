@@ -10,6 +10,7 @@ import pytest
 from src.config import (
     ATTACK_BATCH_SIZE,
     BONUS_CITY_POINTS,
+    EXPLOSION_GROUPS,
     EXPLOSION_MAX_RADIUS,
     FLIER_START_WAVE,
     MAX_ABM_SLOTS,
@@ -137,6 +138,35 @@ class TestWaveManagement:
         game = Game()
         game.start_wave()
         assert game.icbms_remaining_this_wave > 0
+
+    def test_multiplier_matches_wave(self):
+        game = Game()
+        game.wave_number = 5
+        assert game.multiplier == 3
+
+    def test_destroyed_cities_persist_into_next_wave(self):
+        game = Game()
+        game.start_wave()
+        game.cities.destroy_city(0)
+        game.icbms_remaining_this_wave = 0
+        game.update()  # ends wave 1, advances to wave 2
+        game.start_wave()
+        assert game.cities.cities[0].is_destroyed
+
+    def test_kill_score_scales_with_multiplier(self):
+        game = Game()
+        game.wave_number = 5  # 3x multiplier
+        game.start_wave()
+        game.icbms_remaining_this_wave = 0
+        icbm = ICBM(entry_x=100, entry_y=100, target_x=100, target_y=220, speed=1)
+        game.missiles.icbm_slots[0] = icbm
+        exp = Explosion(center_x=100, center_y=100, max_radius=13, expand_rate=13)
+        game.explosions.add(exp)
+        for _ in range(EXPLOSION_GROUPS):
+            game.update()
+            if game.score_display.player_score:
+                break
+        assert game.score_display.player_score == POINTS_PER_ICBM * 3
 
 
 # ── Slot Management Tests ──────────────────────────────────────────────────
