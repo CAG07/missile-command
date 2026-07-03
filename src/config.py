@@ -145,3 +145,5 @@ FIXED_POINT_SCALE: int = 1 << FIXED_POINT_SHIFT  # 256
 # ---------------------------------------------------------------------------
 DEFAULT_SCALE: int = 3  # integer upscale factor for the 256x231 native surface
 GROUND_Y: int = 220     # native-pixel Y of the ground line
+CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
+WAVE_END_DISPLAY_FRAMES: int = 180  # ~3s tally screen before the next wave

@@ -284,23 +284,33 @@ class Game:
         city_positions = [c.position for c in self.cities.active_cities]
         silo_positions = [s.position for s in self.defenses.silos if not s.is_destroyed]
 
+        city_position_set = set(city_positions)
         targeted_cities = {
             (m.target_x, m.target_y)
             for m in self.missiles.icbm_slots
-            if m is not None and m.is_active and (m.target_x, m.target_y) in city_positions
+            if m is not None and m.is_active and (m.target_x, m.target_y) in city_position_set
         }
 
-        if len(targeted_cities) >= max_city_targets:
-            available_cities = [p for p in city_positions if p in targeted_cities]
-        else:
-            available_cities = city_positions
+        # Update targeted_cities as we draw so a single multi-target call
+        # (e.g. a MIRV burst) can't itself exceed the mercy-rule allowance.
+        results: list[tuple[int, int]] = []
+        for _ in range(count):
+            if len(targeted_cities) >= max_city_targets:
+                available_cities = [p for p in city_positions if p in targeted_cities]
+            else:
+                available_cities = city_positions
 
-        candidates = available_cities + silo_positions
-        if not candidates:
-            candidates = city_positions + silo_positions
-        if not candidates:
-            return []
-        return [random.choice(candidates) for _ in range(count)]
+            candidates = available_cities + silo_positions
+            if not candidates:
+                candidates = city_positions + silo_positions
+            if not candidates:
+                break
+
+            choice = random.choice(candidates)
+            results.append(choice)
+            if choice in city_position_set:
+                targeted_cities.add(choice)
+        return results
 
     # ── Attack pacing ─────────────────────────────────────────────────────
 

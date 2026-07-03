@@ -13,10 +13,10 @@ from src.config import SCREEN_WIDTH, SCREEN_HEIGHT
 
 
 class TestEntryPoint:
-    def test_missile_defense_py_exists(self):
-        """missile-defense.py must exist as the game entry point."""
+    def test_main_py_exists(self):
+        """main.py must exist as the game entry point."""
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        assert os.path.isfile(os.path.join(root, "missile-defense.py"))
+        assert os.path.isfile(os.path.join(root, "main.py"))
 
 
 # ── Argument parsing ───────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ class TestEntryPoint:
 class TestParseArgs:
     def test_defaults(self):
         args = parse_args([])
-        assert args.scale == 2
+        assert args.scale == 3
         assert args.fullscreen is False
         assert args.debug is False
         assert args.wave == 1
@@ -72,7 +72,7 @@ class TestParseArgs:
 class TestMissileCommandApp:
     def test_app_defaults(self):
         app = MissileCommandApp()
-        assert app.scale == 2
+        assert app.scale == 3
         assert app.fullscreen is False
         assert app.debug is False
         assert app.running is False
