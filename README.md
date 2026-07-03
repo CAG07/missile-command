@@ -144,32 +144,6 @@ New attacks don't launch while highest ICBM is above:
 - Fixed-point math for efficiency
 - Optimized rendering pipeline
 
-## File Structure
-```
-missile-command/
-├── src/
-│   ├── config.py           # Game configuration and constants
-│   ├── game.py             # Main game logic and state management
-│   ├── models/
-│   │   ├── missile.py      # ABM, ICBM, SmartBomb, Flier classes
-│   │   ├── explosion.py    # Explosion system
-│   │   ├── city.py         # City and bonus management
-│   │   └── defense.py      # Silo management
-│   ├── utils/
-│   │   ├── functions.py    # Math and utility functions
-│   │   └── input_handler.py # Input processing
-│   └── ui/
-│       └── text.py         # Text rendering and scrolling
-├── data/
-│   ├── fnt/                # Fonts
-│   ├── img/                # Sprites and graphics
-│   └── sfx/                # Sound effects
-├── tests/                  # Unit tests
-├── missile-defense.py      # Application entry point
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
-```
-
 ## Testing
 
 Run the test suite:
