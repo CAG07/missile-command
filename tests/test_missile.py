@@ -253,12 +253,24 @@ class TestFlierMissile:
         f = Flier.create_random(wave_number=1)
         assert f.flier_type in (FlierType.BOMBER, FlierType.SATELLITE)
 
-    def test_horizontal_movement(self):
+    def test_bomber_moves_one_pixel_every_three_frames(self):
         f = Flier(flier_type=FlierType.BOMBER, altitude=115,
-                  direction=1, speed=2, resurrection_timer=60,
+                  direction=1, speed=1, resurrection_timer=60,
                   firing_timer=30, current_x=0)
         f.update()
-        assert f.current_x == 2
+        f.update()
+        assert f.current_x == 0
+        f.update()
+        assert f.current_x == 1
+
+    def test_satellite_moves_one_pixel_every_two_frames(self):
+        f = Flier(flier_type=FlierType.SATELLITE, altitude=115,
+                  direction=1, speed=1, resurrection_timer=60,
+                  firing_timer=30, current_x=0)
+        f.update()
+        assert f.current_x == 0
+        f.update()
+        assert f.current_x == 1
 
     def test_fires_missiles(self):
         f = Flier(flier_type=FlierType.SATELLITE, altitude=115,

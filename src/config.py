@@ -81,11 +81,6 @@ MIRV_ALTITUDE_HIGH: int = 159
 MIRV_MAX_CHILDREN: int = 3
 
 # ---------------------------------------------------------------------------
-# Flier
-# ---------------------------------------------------------------------------
-FLIER_ALTITUDE: int = 115  # approximately mid-screen
-
-# ---------------------------------------------------------------------------
 # Scoring (per original arcade)
 # ---------------------------------------------------------------------------
 POINTS_PER_ICBM: int = 25
@@ -104,6 +99,13 @@ WAVE_SPEEDS: list[int] = [
     6, 6, 7, 7, 8, 8, 8, 8, 8, 8,
 ]
 
+# ICBMs launched per wave (1-indexed by position; wave 20+ reuses the
+# last entry). Source: https://6502disassembly.com/va-missile-command/wave-guide.html
+ICBM_COUNT_TABLE: list[int] = [
+    12, 15, 18, 12, 16, 14, 17, 10, 13, 16,
+    19, 12, 14, 16, 18, 14, 17, 19, 22,
+]
+
 # Attack pacing altitude = 202 - 2 * wave_number, minimum 180
 ATTACK_PACE_BASE: int = 202
 ATTACK_PACE_FACTOR: int = 2
@@ -113,7 +115,7 @@ ATTACK_PACE_MIN: int = 180
 # Smart bomb
 # ---------------------------------------------------------------------------
 MAX_SMART_BOMBS: int = 2  # max on screen at once
-SMART_BOMB_START_WAVE: int = 4       # first wave smart bombs may appear
+SMART_BOMB_START_WAVE: int = 6       # first wave smart bombs may appear (wave-guide)
 SMART_BOMB_CHANCE: float = 0.2       # chance a paced attack spawn is a smart bomb
 SMART_BOMB_EVASION_RADIUS: int = 40  # native-pixel radius that triggers evasion
 
@@ -124,10 +126,25 @@ ATTACK_BATCH_SIZE: int = 4  # max ICBMs launched in a single pacing check
 
 # ---------------------------------------------------------------------------
 # Flier (bomber / satellite) spawning
+#
+# Per-wave (cooldown_frames, fire_rate_frames, (altitude_min, altitude_max)).
+# Fliers first appear in wave 2 ("appear as often as possible"); values
+# beyond wave 8 continue unchanged. Bombers move 1px/3 frames, satellites
+# 1px/2 frames. Source: https://6502disassembly.com/va-missile-command/wave-guide.html
 # ---------------------------------------------------------------------------
 FLIER_START_WAVE: int = 2
 FLIER_INITIAL_DELAY_FRAMES: int = 300  # ~5s at 60Hz before the first flier
-FLIER_TIMER_SCALE: int = 10            # scales Flier's raw cooldown units to frames
+FLIER_WAVE_TABLE: dict[int, tuple[int, int, tuple[int, int]]] = {
+    2: (240, 128, (148, 195)),
+    3: (160, 96, (148, 195)),
+    4: (128, 64, (132, 163)),
+    5: (128, 48, (132, 163)),
+    6: (96, 32, (100, 131)),
+    7: (64, 32, (100, 131)),
+    8: (32, 16, (100, 131)),
+}
+FLIER_BOMBER_MOVE_INTERVAL: int = 3   # 1 pixel every N frames
+FLIER_SATELLITE_MOVE_INTERVAL: int = 2  # 1 pixel every N frames
 
 # ---------------------------------------------------------------------------
 # Colors (arcade palette indices)
@@ -148,3 +165,4 @@ DEFAULT_SCALE: int = 3  # integer upscale factor for the 256x231 native surface
 GROUND_Y: int = 220     # native-pixel Y of the ground line
 CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
 WAVE_END_DISPLAY_FRAMES: int = 180  # ~3s tally screen before the next wave
+GAME_OVER_DISPLAY_FRAMES: int = 120  # ~2s for the "THE END" animation to play

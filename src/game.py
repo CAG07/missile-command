@@ -21,7 +21,6 @@ from src.config import (
     ATTACK_BATCH_SIZE,
     FLIER_INITIAL_DELAY_FRAMES,
     FLIER_START_WAVE,
-    FLIER_TIMER_SCALE,
     MAX_CITIES_DESTROYED_PER_WAVE,
     MAX_ICBM_SLOTS,
     MAX_SMART_BOMBS,
@@ -50,6 +49,7 @@ from src.utils.functions import (
     calculate_wave_bonus,
     distance_approx,
     get_attack_pace_altitude,
+    get_icbm_count_for_wave,
     get_score_multiplier,
     get_wave_speed,
 )
@@ -110,8 +110,8 @@ class Game:
         self.flier_fire_cooldown = 0
 
     def _icbms_for_wave(self) -> int:
-        """Determine how many ICBMs to launch this wave."""
-        return min(8 + self.wave_number * 2, 30)
+        """Determine how many ICBMs to launch this wave (see wave guide)."""
+        return get_icbm_count_for_wave(self.wave_number)
 
     @property
     def multiplier(self) -> int:
@@ -431,12 +431,12 @@ class Game:
                 return
             new_flier = Flier.create_random(self.wave_number, SCREEN_WIDTH)
             self.missiles.set_flier(new_flier)
-            self.flier_fire_cooldown = new_flier.firing_timer * FLIER_TIMER_SCALE
+            self.flier_fire_cooldown = new_flier.firing_timer
             return
 
         if flier.current_x < -8 or flier.current_x > SCREEN_WIDTH + 8:
             flier.deactivate()
-            self.flier_spawn_timer = flier.resurrection_timer * FLIER_TIMER_SCALE
+            self.flier_spawn_timer = flier.resurrection_timer
             return
 
         self.flier_fire_cooldown -= 1
@@ -448,7 +448,7 @@ class Game:
                     for shot in flier.fire(targets, speed=speed):
                         if self.missiles.add_icbm(shot):
                             self.icbms_remaining_this_wave -= 1
-            self.flier_fire_cooldown = flier.firing_timer * FLIER_TIMER_SCALE
+            self.flier_fire_cooldown = flier.firing_timer
 
     # ── Player actions ──────────────────────────────────────────────────
 

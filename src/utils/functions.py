@@ -17,6 +17,8 @@ from src.config import (
     ATTACK_PACE_MIN,
     FIXED_POINT_SCALE,
     FIXED_POINT_SHIFT,
+    FLIER_WAVE_TABLE,
+    ICBM_COUNT_TABLE,
     POINTS_PER_REMAINING_ABM,
     POINTS_PER_SURVIVING_CITY,
     WAVE_SPEEDS,
@@ -64,6 +66,24 @@ def get_attack_pace_altitude(wave_number: int) -> int:
     """
     alt = ATTACK_PACE_BASE - ATTACK_PACE_FACTOR * wave_number
     return max(alt, ATTACK_PACE_MIN)
+
+
+def get_icbm_count_for_wave(wave_number: int) -> int:
+    """Return the ICBM budget for a given wave (1-indexed, per the wave guide)."""
+    idx = min(max(wave_number, 1) - 1, len(ICBM_COUNT_TABLE) - 1)
+    return ICBM_COUNT_TABLE[idx]
+
+
+def get_flier_wave_params(wave_number: int) -> tuple[int, int, tuple[int, int]]:
+    """Return (cooldown_frames, fire_rate_frames, altitude_range) for a wave.
+
+    Values are undefined before wave 2 (no fliers); waves beyond the
+    table reuse the highest defined wave's values.
+    """
+    lowest = min(FLIER_WAVE_TABLE)
+    highest = max(FLIER_WAVE_TABLE)
+    key = min(max(wave_number, lowest), highest)
+    return FLIER_WAVE_TABLE[key]
 
 
 # ── Scoring helpers ─────────────────────────────────────────────────────────

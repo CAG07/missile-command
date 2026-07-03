@@ -262,3 +262,24 @@ class Renderer:
             surf = font.render(text, True, (0, 255, 0))
             self.native.blit(surf, (4, y))
             y += 9
+
+    # ── Game over: "THE END" ──────────────────────────────────────────────
+
+    def draw_the_end(self, frame_count: int) -> None:
+        """Draw the expanding octagonal "THE END" game-over screen.
+
+        A yellow octagon expands from the center over ~1.5s, then a
+        red "THE END" caption fades in once it's large enough to
+        contain the text, over the ruined (already-drawn) landscape.
+        """
+        max_radius = 150
+        radius = min(max_radius, frame_count * 3)
+        cx, cy = SCREEN_WIDTH // 2, (GROUND_Y // 2)
+        if radius > 0:
+            pygame.draw.polygon(self.native, (235, 205, 40), octagon_points(cx, cy, radius))
+        if radius >= max_radius * 0.5:
+            font = get_font(16)
+            surf = font.render("THE END", True, (200, 30, 30))
+            x = cx - surf.get_width() // 2
+            y = cy - surf.get_height() // 2
+            self.native.blit(surf, (x, y))

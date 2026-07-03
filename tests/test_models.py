@@ -47,6 +47,8 @@ from src.ui.text import ScoreDisplay
 from src.utils.functions import (
     calculate_wave_bonus,
     get_attack_pace_altitude,
+    get_flier_wave_params,
+    get_icbm_count_for_wave,
     get_score_multiplier,
     get_wave_speed,
 )
@@ -623,6 +625,25 @@ class TestWaveHelpers:
         bonus = calculate_wave_bonus(surviving_cities=4, remaining_abms=10, multiplier=3)
         assert bonus == (4 * 100 + 10 * 5) * 3
 
+    def test_icbm_count_matches_wave_guide(self):
+        assert get_icbm_count_for_wave(1) == 12
+        assert get_icbm_count_for_wave(2) == 15
+        assert get_icbm_count_for_wave(8) == 10
+        assert get_icbm_count_for_wave(19) == 22
+
+    def test_icbm_count_beyond_table_reuses_last_entry(self):
+        assert get_icbm_count_for_wave(50) == get_icbm_count_for_wave(19)
+
+    def test_flier_params_before_wave_2_clamped_to_wave_2(self):
+        assert get_flier_wave_params(1) == get_flier_wave_params(2)
+
+    def test_flier_params_match_wave_guide(self):
+        assert get_flier_wave_params(2) == (240, 128, (148, 195))
+        assert get_flier_wave_params(6) == (96, 32, (100, 131))
+
+    def test_flier_params_beyond_table_reuse_wave_8(self):
+        assert get_flier_wave_params(50) == get_flier_wave_params(8)
+
     def test_score_multiplier_schedule(self):
         assert get_score_multiplier(1) == 1
         assert get_score_multiplier(2) == 1
@@ -696,12 +717,15 @@ class TestFlier:
         assert f.is_active
         assert f.flier_type in (FlierType.BOMBER, FlierType.SATELLITE)
 
-    def test_horizontal_movement(self):
+    def test_bomber_moves_one_pixel_every_three_frames(self):
         f = Flier(flier_type=FlierType.BOMBER, altitude=115,
-                  direction=1, speed=2, resurrection_timer=60,
+                  direction=1, speed=1, resurrection_timer=60,
                   firing_timer=30, current_x=0)
         f.update()
-        assert f.current_x == 2
+        f.update()
+        assert f.current_x == 0
+        f.update()
+        assert f.current_x == 1
 
     def test_fire(self):
         f = Flier(flier_type=FlierType.SATELLITE, altitude=115,

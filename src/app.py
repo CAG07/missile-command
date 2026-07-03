@@ -13,7 +13,6 @@ References:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -26,6 +25,7 @@ except ImportError:
 from src.config import (
     CROSSHAIR_SENSITIVITY,
     DEFAULT_SCALE,
+    GAME_OVER_DISPLAY_FRAMES,
     GROUND_Y,
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -151,6 +151,10 @@ class MissileCommandApp:
     # Audio
     audio: AudioManager = field(default_factory=AudioManager)
     audio_cues: AudioCueTracker = field(default_factory=AudioCueTracker)
+
+    # Game-over "THE END" animation timer (frames)
+    game_over_timer: int = 0
+    _game_over_initials_done: bool = field(default=False, repr=False)
 
     # High scores
     high_scores: dict = field(default_factory=dict)
@@ -339,13 +343,24 @@ class MissileCommandApp:
         if prev != GameState.GAME_OVER and self.game.state == GameState.GAME_OVER:
             self.audio_cues.stop_all_loops(self.audio)
             self.audio.play(SoundEvent.GAME_OVER)
-            score = self.game.score_display.player_score
-            score_pos = check_high_score(score, self.high_scores)
-            if score_pos > 0:
-                name = self._prompt_initials()
-                self.high_scores = update_high_scores(score, name, self.high_scores)
-                save_high_scores(self.scores_file, self.high_scores)
-            self._reset_to_attract()
+            self.game_over_timer = 0
+            self._game_over_initials_done = False
+            return
+
+        if self.game.state == GameState.GAME_OVER:
+            self.game_over_timer += 1
+            if (
+                self.game_over_timer >= GAME_OVER_DISPLAY_FRAMES
+                and not self._game_over_initials_done
+            ):
+                self._game_over_initials_done = True
+                score = self.game.score_display.player_score
+                score_pos = check_high_score(score, self.high_scores)
+                if score_pos > 0:
+                    name = self._prompt_initials()
+                    self.high_scores = update_high_scores(score, name, self.high_scores)
+                    save_high_scores(self.scores_file, self.high_scores)
+                self._reset_to_attract()
             return
 
         if prev != GameState.WAVE_END and self.game.state == GameState.WAVE_END:
@@ -393,63 +408,73 @@ class MissileCommandApp:
         if self.tournament:
             self.game.cities.bonus_threshold = 0
 
-    def _prompt_initials(self) -> str:
-        """Show a text prompt and let the player type up to 3 initials.
+    #: Selectable characters for trackball-style initials entry.
+    INITIALS_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
 
-        Returns the entered string, or ``"---"`` if nothing was typed.
+    def _prompt_initials(self) -> str:
+        """Let the player pick 3 initials via mouse-x + click (trackball style).
+
+        Moving the mouse scrubs a highlighted letter across
+        ``INITIALS_CHARSET``; a left click confirms it for the current
+        slot and advances to the next. Returns the 3-character string,
+        or ``"---"`` if the window is closed before any slot is confirmed.
         """
         if pygame is None or self.renderer is None or self.renderer.window is None:
             return "---"
 
-        pygame.mouse.set_visible(True)
-        font_path = "data/fnt/PressStart2P-Regular.ttf"
-        try:
-            if os.path.isfile(font_path):
-                font = pygame.font.Font(font_path, 8 * self.scale)
-            else:
-                font = pygame.font.Font(None, 16 * self.scale)
-        except Exception:
-            font = pygame.font.Font(None, 16 * self.scale)
+        charset = self.INITIALS_CHARSET
+        initials = ["A", "A", "A"]
+        slot = 0
 
-        window = self.renderer.window
-        w, h = window.get_size()
-        color = (255, 255, 255)
-        prompt_text = "ENTER YOUR INITIALS:"
-        initials = ""
-        finished = False
-
-        while not finished:
+        while slot < 3:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    pygame.mouse.set_visible(False)
-                    return initials if initials.strip() else "---"
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        finished = True
-                    elif event.key == pygame.K_BACKSPACE:
-                        initials = initials[:-1]
-                    elif event.key == pygame.K_ESCAPE:
-                        finished = True
-                    elif len(initials) < 3 and event.unicode.isalnum():
-                        initials += event.unicode
+                    return "".join(initials[:slot]) if slot > 0 else "---"
+                elif event.type == pygame.MOUSEMOTION:
+                    self._move_crosshair(event.rel)
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    slot += 1
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    return "".join(initials[:slot]) if slot > 0 else "---"
 
-            window.fill((0, 0, 0))
-            prompt_surf = font.render(prompt_text, True, color)
-            px = w // 2 - prompt_surf.get_width() // 2
-            py = h // 2 - prompt_surf.get_height() * 2
-            window.blit(prompt_surf, (px, py))
+            fraction = self.crosshair_x / SCREEN_WIDTH
+            idx = max(0, min(len(charset) - 1, int(fraction * len(charset))))
+            current_char = charset[idx]
+            if slot < 3:
+                initials[slot] = current_char
 
-            initials_surf = font.render(initials, True, color)
-            ix = w // 2 - initials_surf.get_width() // 2
-            iy = py + prompt_surf.get_height() + 8 * self.scale
-            window.blit(initials_surf, (ix, iy))
+            self._render_initials_entry(initials, slot, current_char)
+            self.renderer.present()
 
-            pygame.display.flip()
+            if self.renderer.window is not None:
+                win_w, win_h = self.renderer.window.get_size()
+                pygame.mouse.set_pos((win_w // 2, win_h // 2))
+
             self.clock.tick(UPDATE_RATE)
 
-        pygame.mouse.set_visible(False)
-        return initials if initials.strip() else "---"
+        return "".join(initials)
+
+    def _render_initials_entry(
+        self, initials: list[str], active_slot: int, current_char: str
+    ) -> None:
+        """Draw the trackball-style initials entry screen."""
+        self.renderer.native.fill((0, 0, 0))
+        self._center_text("ENTER YOUR INITIALS", 8, 50)
+        self._center_text("MOVE MOUSE, CLICK TO SELECT", 6, 68)
+        self._center_text(self.game.score_display.format_score(), 8, 150)
+
+        slot_w = 24
+        start_x = SCREEN_WIDTH // 2 - (slot_w * 3) // 2
+        for i in range(3):
+            if i < active_slot:
+                ch, color = initials[i], (255, 255, 255)
+            elif i == active_slot:
+                ch, color = current_char, (255, 220, 0)
+            else:
+                ch, color = "_", (120, 120, 120)
+            surf = get_font(14).render(ch, True, color)
+            self.renderer.native.blit(surf, (start_x + i * slot_w, 100))
 
     # ── Rendering ───────────────────────────────────────────────────────
 
@@ -493,9 +518,9 @@ class MissileCommandApp:
         self._center_text(f"SCORE {self.tally_displayed_score}", 8, 150)
 
     def _render_game_over(self) -> None:
-        self._center_text("THE END", 10, 90)
-        self._center_text(self.game.score_display.format_score(), 8, 120)
-        self._center_text(self.game.score_display.format_high_score(), 8, 140)
+        self.renderer.draw_the_end(self.game_over_timer)
+        self._center_text(self.game.score_display.format_score(), 8, 190)
+        self._center_text(self.game.score_display.format_high_score(), 8, 205)
 
     # ── Shutdown ────────────────────────────────────────────────────────
 

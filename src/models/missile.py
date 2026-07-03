@@ -21,6 +21,8 @@ from src.config import (
     ABM_SPEED_SIDE,
     FIXED_POINT_SCALE,
     FIXED_POINT_SHIFT,
+    FLIER_BOMBER_MOVE_INTERVAL,
+    FLIER_SATELLITE_MOVE_INTERVAL,
     MAX_ABM_SLOTS,
     MAX_ICBM_SLOTS,
     MAX_SMART_BOMBS,
@@ -29,6 +31,7 @@ from src.config import (
     MIRV_MAX_CHILDREN,
     WAVE_SPEEDS,
 )
+from src.utils.functions import get_flier_wave_params
 
 
 # ── Fixed-point 8.8 math utilities ─────────────────────────────────────────
@@ -400,9 +403,10 @@ class FlierType(Enum):
 class Flier:
     """Bomber or Satellite that crosses the screen horizontally.
 
-    Travels at mid-screen altitude and can fire multiple missiles at
-    once.  Has resurrection and firing cooldowns that decrease on later
-    waves.
+    Travels at a per-wave altitude band and can fire multiple missiles
+    at once.  Resurrection and firing cooldowns shorten on later waves
+    per the wave guide (bombers move 1px/3 frames, satellites 1px/2
+    frames -- see FLIER_BOMBER_MOVE_INTERVAL / FLIER_SATELLITE_MOVE_INTERVAL).
     """
 
     flier_type: FlierType
@@ -414,25 +418,24 @@ class Flier:
     current_x: int = 0
     can_fire: bool = True
     is_active: bool = True
+    move_counter: int = 0
 
     @staticmethod
     def create_random(
         wave_number: int,
         screen_width: int = 256,
-        altitude: int = 115,
     ) -> "Flier":
-        """Factory: create a random Bomber or Satellite."""
+        """Factory: create a random Bomber or Satellite for *wave_number*."""
         ft = random.choice([FlierType.BOMBER, FlierType.SATELLITE])
         direction = random.choice([-1, 1])
         start_x = 0 if direction == 1 else screen_width - 1
-        speed = 1
-        res_timer = max(60 - wave_number * 5, 10)
-        fire_timer = max(30 - wave_number * 3, 5)
+        res_timer, fire_timer, (alt_min, alt_max) = get_flier_wave_params(wave_number)
+        altitude = random.randint(alt_min, alt_max)
         return Flier(
             flier_type=ft,
             altitude=altitude,
             direction=direction,
-            speed=speed,
+            speed=1,
             resurrection_timer=res_timer,
             firing_timer=fire_timer,
             current_x=start_x,
@@ -442,11 +445,23 @@ class Flier:
     def current_pos(self) -> tuple[int, int]:
         return (self.current_x, self.altitude)
 
+    @property
+    def move_interval(self) -> int:
+        """Frames needed to advance one pixel (bombers are slower)."""
+        return (
+            FLIER_BOMBER_MOVE_INTERVAL
+            if self.flier_type is FlierType.BOMBER
+            else FLIER_SATELLITE_MOVE_INTERVAL
+        )
+
     def update(self) -> None:
-        """Move the flier one frame horizontally."""
+        """Move the flier one pixel every ``move_interval`` frames."""
         if not self.is_active:
             return
-        self.current_x += self.speed * self.direction
+        self.move_counter += 1
+        if self.move_counter >= self.move_interval:
+            self.move_counter = 0
+            self.current_x += self.direction
 
     def fire(
         self,
