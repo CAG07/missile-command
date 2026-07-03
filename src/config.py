@@ -112,6 +112,21 @@ ATTACK_PACE_MIN: int = 180
 # Smart bomb
 # ---------------------------------------------------------------------------
 MAX_SMART_BOMBS: int = 2  # max on screen at once
+SMART_BOMB_START_WAVE: int = 4       # first wave smart bombs may appear
+SMART_BOMB_CHANCE: float = 0.2       # chance a paced attack spawn is a smart bomb
+SMART_BOMB_EVASION_RADIUS: int = 40  # native-pixel radius that triggers evasion
+
+# ---------------------------------------------------------------------------
+# Attack pacing / wave spawning
+# ---------------------------------------------------------------------------
+ATTACK_BATCH_SIZE: int = 4  # max ICBMs launched in a single pacing check
+
+# ---------------------------------------------------------------------------
+# Flier (bomber / satellite) spawning
+# ---------------------------------------------------------------------------
+FLIER_START_WAVE: int = 2
+FLIER_INITIAL_DELAY_FRAMES: int = 300  # ~5s at 60Hz before the first flier
+FLIER_TIMER_SCALE: int = 10            # scales Flier's raw cooldown units to frames
 
 # ---------------------------------------------------------------------------
 # Colors (arcade palette indices)
@@ -124,3 +139,9 @@ COLOR_EXPLOSION_FLASH_B: int = 5
 # ---------------------------------------------------------------------------
 FIXED_POINT_SHIFT: int = 8  # 8.8 format
 FIXED_POINT_SCALE: int = 1 << FIXED_POINT_SHIFT  # 256
+
+# ---------------------------------------------------------------------------
+# Rendering / window
+# ---------------------------------------------------------------------------
+DEFAULT_SCALE: int = 3  # integer upscale factor for the 256x231 native surface
+GROUND_Y: int = 220     # native-pixel Y of the ground line

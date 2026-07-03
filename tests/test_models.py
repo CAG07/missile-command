@@ -557,6 +557,22 @@ class TestDefenseManager:
         assert mgr.total_abm_count == SILO_CAPACITY * 3
         assert not mgr.silos[1].is_destroyed
 
+    def test_destroy_silo_at(self):
+        mgr = DefenseManager()
+        x, y = mgr.silos[0].position
+        assert mgr.destroy_silo_at(x, y) is True
+        assert mgr.silos[0].is_destroyed
+
+    def test_destroy_silo_at_no_match(self):
+        mgr = DefenseManager()
+        assert mgr.destroy_silo_at(-100, -100) is False
+
+    def test_destroy_silo_at_skips_already_destroyed(self):
+        mgr = DefenseManager()
+        x, y = mgr.silos[0].position
+        mgr.silos[0].destroy()
+        assert mgr.destroy_silo_at(x, y) is False
+
 
 # ── Score Display ───────────────────────────────────────────────────────────
 

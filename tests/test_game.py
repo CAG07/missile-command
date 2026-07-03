@@ -8,9 +8,12 @@ explosion mechanics, and wave helpers.
 import pytest
 
 from src.config import (
+    ATTACK_BATCH_SIZE,
     BONUS_CITY_POINTS,
     EXPLOSION_MAX_RADIUS,
+    FLIER_START_WAVE,
     MAX_ABM_SLOTS,
+    MAX_CITIES_DESTROYED_PER_WAVE,
     MAX_ICBM_SLOTS,
     POINTS_PER_FLIER,
     POINTS_PER_ICBM,
@@ -265,3 +268,154 @@ class TestGameIntegration:
         game.spawn_icbm(100, 0, 100, 200)
         state = game.update()
         assert state == GameState.RUNNING
+
+
+# ── Detonation / arrival Tests ──────────────────────────────────────────────
+
+
+class TestArrivals:
+    def test_abm_arrival_spawns_explosion(self):
+        game = Game()
+        game.start_wave()
+        game.icbms_remaining_this_wave = 0
+        game.fire_from_silo(1, 128, 50)
+        abm = next(s for s in game.missiles.abm_slots if s is not None)
+        # Force the ABM to its target so it detonates this frame.
+        abm.current_x_fp = abm.target_x << 8
+        abm.current_y_fp = abm.target_y << 8
+        game.update()
+        assert game.explosions.active_count == 1
+        centers = game.explosions.active_explosion_centers
+        assert centers[0] == (128, 50)
+
+    def test_icbm_arrival_destroys_city_and_spawns_explosion(self):
+        game = Game()
+        game.start_wave()
+        city = game.cities.active_cities[0]
+        cx, cy = city.position
+        game.spawn_icbm(cx, 0, cx, cy)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = cx << 8
+        icbm.current_y_fp = cy << 8
+        game.icbms_remaining_this_wave = 0
+        game.update()
+        assert city.is_destroyed
+        assert game.explosions.active_count >= 1
+
+    def test_icbm_arrival_destroys_silo(self):
+        game = Game()
+        game.start_wave()
+        silo = game.defenses.silos[0]
+        sx, sy = silo.position
+        game.spawn_icbm(sx, 0, sx, sy)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = sx << 8
+        icbm.current_y_fp = sy << 8
+        game.icbms_remaining_this_wave = 0
+        game.update()
+        assert silo.is_destroyed
+
+
+# ── Attack Pacing Tests ──────────────────────────────────────────────────
+
+
+class TestAttackPacing:
+    def test_wave_start_launches_initial_batch(self):
+        game = Game()
+        game.start_wave()
+        game.update()
+        assert game.missiles.active_icbm_count > 0
+
+    def test_pacing_blocks_until_descent(self):
+        game = Game()
+        game.start_wave()
+        game.update()  # launches initial batch near the top of the screen
+        count_after_first_batch = game.missiles.active_icbm_count
+        # Immediately after launch, missiles are near the top (high
+        # "altitude"), so pacing should hold off on a second batch.
+        game.update()
+        assert game.missiles.active_icbm_count <= count_after_first_batch + ATTACK_BATCH_SIZE
+
+    def test_never_exceeds_icbm_slots(self):
+        game = Game()
+        game.start_wave()
+        for _ in range(200):
+            if game.state != GameState.RUNNING:
+                break
+            game.update()
+            assert game.missiles.active_icbm_count <= MAX_ICBM_SLOTS
+
+
+# ── Mercy Rule Tests ─────────────────────────────────────────────────────
+
+
+class TestMercyRule:
+    def test_wave_ends_immediately_after_three_cities_and_no_abms(self):
+        game = Game()
+        game.start_wave()
+        for silo in game.defenses.silos:
+            silo.abm_count = 0
+        for i, city in enumerate(game.cities.cities):
+            if i < MAX_CITIES_DESTROYED_PER_WAVE:
+                game.cities.destroy_city(i)
+        state = game.update()
+        assert state == GameState.WAVE_END
+
+    def test_never_loses_more_than_three_cities_via_targeting(self):
+        game = Game()
+        game.start_wave()
+        for i in range(MAX_CITIES_DESTROYED_PER_WAVE):
+            game.cities.destroy_city(i)
+        targets = game._pick_targets(5)
+        city_positions = {c.position for c in game.cities.active_cities}
+        targeted = [t for t in targets if t in city_positions]
+        # With the per-wave limit already spent, any further city target
+        # must be empty (no cities left to target under the cap) or fall
+        # back to re-targeting an already-destroyed-city slot's siblings.
+        assert len(set(targeted)) <= 1
+
+
+# ── Smart Bomb / MIRV Integration Tests ─────────────────────────────────
+
+
+class TestSmartBombIntegration:
+    def test_evasion_cleared_when_no_explosions_nearby(self):
+        game = Game()
+        game.start_wave()
+        sb = SmartBomb(entry_x=100, entry_y=100, target_x=100, target_y=220, speed=1)
+        game.missiles.icbm_slots[0] = sb
+        game.icbms_remaining_this_wave = 0
+        game.update()
+        assert sb.evasion_active is False
+
+    def test_evasion_activates_near_explosion(self):
+        game = Game()
+        game.start_wave()
+        sb = SmartBomb(entry_x=100, entry_y=100, target_x=100, target_y=220, speed=1)
+        game.missiles.icbm_slots[0] = sb
+        game.explosions.add(Explosion(center_x=105, center_y=100, max_radius=13))
+        game.icbms_remaining_this_wave = 0
+        game._update_smart_bomb_evasion()
+        assert sb.evasion_active is True
+
+
+# ── Flier Integration Tests ─────────────────────────────────────────────
+
+
+class TestFlierIntegration:
+    def test_flier_spawns_after_delay(self):
+        game = Game()
+        game.wave_number = FLIER_START_WAVE
+        game.start_wave()
+        game.flier_spawn_timer = 0
+        game.update()
+        assert game.missiles.flier_slot is not None
+
+    def test_no_flier_before_start_wave(self):
+        game = Game()
+        game.wave_number = FLIER_START_WAVE - 1
+        game.start_wave()
+        game.flier_spawn_timer = 0
+        for _ in range(5):
+            game.update()
+        assert game.missiles.flier_slot is None

@@ -151,6 +151,23 @@ class DefenseManager:
             return None
         return best.fire(target_x, target_y)
 
+    # Destruction ─────────────────────────────────────────────────────────
+
+    def destroy_silo_at(self, x: int, y: int, radius: int = 10) -> bool:
+        """Destroy the first non-destroyed silo within *radius* of (*x*, *y*).
+
+        Returns True if a silo was destroyed.
+        """
+        for silo in self.silos:
+            if silo.is_destroyed:
+                continue
+            dx = abs(silo.position_x - x)
+            dy = abs(silo.position_y - y)
+            if dx <= radius and dy <= radius:
+                silo.destroy()
+                return True
+        return False
+
     # Wave lifecycle ──────────────────────────────────────────────────────
 
     def restore_all(self) -> None:
