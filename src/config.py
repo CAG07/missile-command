@@ -33,6 +33,7 @@ ABM_SPEED_CENTER: int = 7  # units per frame for center silo
 # ---------------------------------------------------------------------------
 NUM_SILOS: int = 3
 SILO_CAPACITY: int = 10  # ABMs per silo at wave start
+SILO_LOW_THRESHOLD: int = 3  # "LOW" HUD indicator / warning at this many left
 
 # Silo X positions (original arcade screen coordinates)
 SILO_POSITIONS: list[tuple[int, int]] = [
