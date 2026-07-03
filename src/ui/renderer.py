@@ -38,7 +38,7 @@ FONT_PATH = os.path.join("data", "fnt", "PressStart2P-Regular.ttf")
 _font_cache: dict[int, pygame.font.Font] = {}
 
 
-def _get_font(size: int) -> pygame.font.Font:
+def get_font(size: int) -> pygame.font.Font:
     """Return a cached font at *size*, falling back to the default font."""
     if size in _font_cache:
         return _font_cache[size]
@@ -241,7 +241,7 @@ class Renderer:
         pygame.draw.line(self.native, color, (x, y - 4), (x, y + 4))
 
     def _draw_hud(self, game: Game, palette: Palette) -> None:
-        font = _get_font(7)
+        font = get_font(7)
         score_surf = font.render(game.score_display.format_score(), True, palette.text)
         self.native.blit(score_surf, (4, 2))
         high_surf = font.render(game.score_display.format_high_score(), True, palette.text)
@@ -250,7 +250,7 @@ class Renderer:
         self.native.blit(wave_surf, (SCREEN_WIDTH // 2 - wave_surf.get_width() // 2, 2))
 
     def _draw_debug(self, game: Game) -> None:
-        font = _get_font(7)
+        font = get_font(7)
         texts = [
             f"ABM {game.missiles.active_abm_count}/{MAX_ABM_SLOTS}",
             f"ICBM {game.missiles.active_icbm_count}/{MAX_ICBM_SLOTS}",
