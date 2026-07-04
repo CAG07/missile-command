@@ -525,9 +525,10 @@ class MissileCommandApp:
         self._render_high_score_table()
 
     def _render_high_score_table(self) -> None:
-        """Draw the top-10 leaderboard, centered mid-screen."""
-        self._center_text("HIGH SCORES", 8, 130)
-        y = 145
+        """Draw the top-10 leaderboard, centered in the space between the
+        title/subtitle and the ground line."""
+        self._center_text("HIGH SCORES", 8, 78)
+        y = 93
         for pos in [str(i) for i in range(1, 11)]:
             record = self.high_scores.get(pos)
             if not record:
