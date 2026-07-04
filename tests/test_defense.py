@@ -12,6 +12,7 @@ from src.config import (
     MAX_CITIES_DESTROYED_PER_WAVE,
     NUM_CITIES_DEFAULT,
     SILO_CAPACITY,
+    SILO_POSITIONS,
 )
 from src.models.city import City, CityManager
 from src.models.defense import DefenseManager, DefenseSilo
@@ -45,9 +46,9 @@ class TestDefenseSiloUnit:
 
     def test_silo_positions_match_config(self):
         mgr = DefenseManager()
-        assert mgr.silos[0].position_x == 32
-        assert mgr.silos[1].position_x == 128
-        assert mgr.silos[2].position_x == 224
+        assert mgr.silos[0].position_x == SILO_POSITIONS[0][0]
+        assert mgr.silos[1].position_x == SILO_POSITIONS[1][0]
+        assert mgr.silos[2].position_x == SILO_POSITIONS[2][0]
 
     def test_destroyed_silos_dont_fire(self):
         silo = DefenseSilo(silo_index=0, position_x=32, position_y=220)

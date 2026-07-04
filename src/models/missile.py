@@ -29,6 +29,7 @@ from src.config import (
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
     MIRV_MAX_CHILDREN,
+    SCREEN_WIDTH,
 )
 from src.utils.functions import get_flier_wave_params
 
@@ -456,7 +457,7 @@ class Flier:
     @staticmethod
     def create_random(
         wave_number: int,
-        screen_width: int = 256,
+        screen_width: int = SCREEN_WIDTH,
     ) -> "Flier":
         """Factory: create a random Bomber or Satellite for *wave_number*."""
         ft = random.choice([FlierType.BOMBER, FlierType.SATELLITE])

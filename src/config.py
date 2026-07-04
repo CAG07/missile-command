@@ -8,7 +8,12 @@ See Missile Command Disassembly.pdf for technical reference.
 # ---------------------------------------------------------------------------
 # Display
 # ---------------------------------------------------------------------------
-SCREEN_WIDTH: int = 256
+# The original arcade's native resolution was 256x231 (~1.11:1). Widened
+# to a 16:9-ish playfield (410x231) so fullscreen fills modern widescreen
+# monitors without pillarboxing, per user request -- silo/city X positions
+# below are scaled proportionally from the original layout to fill the
+# extra width rather than being stretched.
+SCREEN_WIDTH: int = 410
 SCREEN_HEIGHT: int = 231
 UPDATE_RATE: int = 60  # Hz – all timing assumes 60 fps
 
@@ -35,11 +40,13 @@ NUM_SILOS: int = 3
 SILO_CAPACITY: int = 10  # ABMs per silo at wave start
 SILO_LOW_THRESHOLD: int = 3  # "LOW" HUD indicator / warning at this many left
 
-# Silo X positions (original arcade screen coordinates)
+# Silo X positions, scaled proportionally from the original arcade's
+# 256-wide layout (32, 128, 224) to fill the widened 410px playfield.
+# Center silo stays exactly at SCREEN_WIDTH // 2.
 SILO_POSITIONS: list[tuple[int, int]] = [
-    (32, 220),    # left silo   (index 0)
-    (128, 220),   # center silo (index 1)
-    (224, 220),   # right silo  (index 2)
+    (51, 220),    # left silo   (index 0)
+    (205, 220),   # center silo (index 1)
+    (359, 220),   # right silo  (index 2)
 ]
 SILO_Y: int = 220  # ground-level Y for all silos
 
@@ -49,14 +56,15 @@ SILO_Y: int = 220  # ground-level Y for all silos
 NUM_CITIES_DEFAULT: int = 6  # marathon-mode default (DIP switch selectable 4-7)
 MAX_CITIES_DESTROYED_PER_WAVE: int = 3
 
-# Arcade city positions (X only; Y sits on the ground line)
+# City X positions, scaled proportionally from the original arcade's
+# 256-wide layout to fill the widened 410px playfield (Y sits on ground).
 CITY_POSITIONS: list[tuple[int, int]] = [
-    (48, 216),
-    (72, 216),
-    (96, 216),
-    (160, 216),
-    (184, 216),
-    (208, 216),
+    (77, 216),
+    (115, 216),
+    (154, 216),
+    (256, 216),
+    (295, 216),
+    (333, 216),
 ]
 CITY_Y: int = 216
 

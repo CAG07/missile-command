@@ -220,11 +220,12 @@ class TestThreeSiloConfig:
         assert len(game.defenses.silos) == 3
 
     def test_silos_at_correct_positions(self):
+        from src.config import SILO_POSITIONS
         from src.game import Game
         game = Game()
-        assert game.defenses.silos[0].position_x == 32    # left
-        assert game.defenses.silos[1].position_x == 128   # center
-        assert game.defenses.silos[2].position_x == 224   # right
+        assert game.defenses.silos[0].position_x == SILO_POSITIONS[0][0]  # left
+        assert game.defenses.silos[1].position_x == SILO_POSITIONS[1][0]  # center
+        assert game.defenses.silos[2].position_x == SILO_POSITIONS[2][0]  # right
 
     def test_each_silo_starts_with_10_abms(self):
         from src.game import Game
