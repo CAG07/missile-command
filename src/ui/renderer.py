@@ -26,6 +26,7 @@ from src.config import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     SILO_CAPACITY,
+    SILO_LOW_THRESHOLD,
 )
 from src.game import Game, GameState
 from src.models.explosion import octagon_points
@@ -146,7 +147,7 @@ class Renderer:
         """Draw one full frame of gameplay onto the native surface."""
         palette = get_palette(game.wave_number)
         self.native.fill(palette.sky)
-        self._draw_ground(palette)
+        self._draw_ground(game, palette)
         self._draw_cities(game, palette)
         self._draw_silos(game, palette)
         self._draw_missiles(game, palette)
@@ -157,44 +158,112 @@ class Renderer:
         if debug:
             self._draw_debug(game)
 
-    def _draw_ground(self, palette: Palette) -> None:
+    #: City tuft cluster: a small, low, bushy cluster of spikes whose
+    #: base sits exactly on the ground line. Kept narrow so the 6 cities
+    #: fit cleanly between the 3 silo mounds without overlapping them.
+    _CITY_TUFT_HEIGHTS = (5, 8, 6, 8, 5)
+    _CITY_TUFT_SPREAD = 8
+
+    #: Silo mound: a wide, low, flat-topped plateau that the ammo rockets
+    #: stand on in a triangular pyramid (see Screenshot 2026-07-04 093456).
+    _SILO_MOUND_HALF_WIDTH = 12
+    _SILO_MOUND_TOP_HALF_WIDTH = 7
+    _SILO_MOUND_HEIGHT = 9
+
+    #: Row sizes (top to bottom) forming a 10-missile triangular pyramid,
+    #: matching SILO_CAPACITY. Filled top-down as ammo count increases.
+    _AMMO_PYRAMID_ROWS = (1, 2, 3, 4)
+
+    def _draw_ground(self, game: Game, palette: Palette) -> None:
+        """Flat ground band with a flat-topped mound under each silo."""
         pygame.draw.rect(
             self.native, palette.ground,
             (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y),
         )
+        for silo in game.defenses.silos:
+            self._draw_silo_mound(silo.position_x, palette)
+
+    def _draw_silo_mound(self, cx: int, palette: Palette) -> None:
+        """Raised flat-topped plateau the silo's ammo rockets stand on."""
+        hw = self._SILO_MOUND_HALF_WIDTH
+        top_hw = self._SILO_MOUND_TOP_HALF_WIDTH
+        h = self._SILO_MOUND_HEIGHT
+        pygame.draw.polygon(
+            self.native, palette.ground,
+            [
+                (cx - hw, GROUND_Y), (cx - top_hw, GROUND_Y - h),
+                (cx + top_hw, GROUND_Y - h), (cx + hw, GROUND_Y),
+            ],
+        )
 
     def _draw_cities(self, game: Game, palette: Palette) -> None:
         for city in game.cities.cities:
-            x, y = city.position
+            x, _ = city.position
             if city.is_destroyed:
-                pygame.draw.rect(self.native, palette.city_destroyed, (x - 6, y - 2, 12, 4))
+                pygame.draw.rect(
+                    self.native, palette.city_destroyed, (x - 6, GROUND_Y - 1, 12, 3),
+                )
             else:
-                pygame.draw.rect(self.native, palette.city, (x - 6, y - 6, 12, 8))
-                pygame.draw.rect(self.native, palette.city, (x - 4, y - 10, 3, 4))
-                pygame.draw.rect(self.native, palette.city, (x + 1, y - 10, 3, 4))
+                self._draw_spiky_cluster(
+                    x, GROUND_Y, palette.city, self._CITY_TUFT_SPREAD, self._CITY_TUFT_HEIGHTS,
+                )
+
+    def _draw_spiky_cluster(
+        self, cx: int, base_y: int, color, spread: int, heights: tuple[int, ...],
+    ) -> None:
+        """Draw a small cluster of jagged spikes (city rubble tufts)."""
+        n = len(heights)
+        start_x = cx - spread // 2
+        step = max(1, spread // n)
+        for i, h in enumerate(heights):
+            x = start_x + i * step
+            pygame.draw.polygon(
+                self.native, color,
+                [(x - 2, base_y), (x, base_y - h), (x + 2, base_y)],
+            )
 
     def _draw_silos(self, game: Game, palette: Palette) -> None:
         for silo in game.defenses.silos:
-            x, y = silo.position
+            x, _ = silo.position
+            top_y = GROUND_Y - self._SILO_MOUND_HEIGHT
             if silo.is_destroyed:
-                pygame.draw.rect(self.native, palette.city_destroyed, (x - 6, y - 2, 12, 4))
+                pygame.draw.rect(
+                    self.native, palette.city_destroyed, (x - 8, top_y - 2, 16, 4),
+                )
                 continue
-            pygame.draw.polygon(
-                self.native, palette.silo,
-                [(x - 6, y + 2), (x + 6, y + 2), (x, y - 8)],
-            )
-            self._draw_ammo_pips(x, y, silo.abm_count, palette)
+            self._draw_ammo_rockets(x, top_y, silo.abm_count, palette)
 
-    def _draw_ammo_pips(self, x: int, y: int, count: int, palette: Palette) -> None:
-        pip_color = palette.silo
+    def _draw_ammo_rockets(self, cx: int, top_y: int, count: int, palette: Palette) -> None:
+        """Draw remaining ABMs as a triangular pyramid of rocket icons
+        standing on the mound's flat top -- one icon per remaining ABM,
+        up to the full 10-missile pyramid at SILO_CAPACITY. Always drawn
+        in the silo's normal color; low ammo is signalled only by the
+        "LOW"/"OUT" HUD banner, not by recoloring the icons."""
         if count <= 0:
-            pip_color = (200, 40, 40)
-        elif count <= 3:
-            pip_color = (240, 200, 40)
-        for i in range(min(count, SILO_CAPACITY)):
-            px = x - 9 + (i % 5) * 4
-            py = y + 6 + (i // 5) * 3
-            pygame.draw.rect(self.native, pip_color, (px, py, 2, 2))
+            return
+        color = palette.silo
+        n = min(count, SILO_CAPACITY)
+        icon_spacing_x = 4
+        row_spacing_y = 3
+        drawn = 0
+        for row_i, row_size in enumerate(self._AMMO_PYRAMID_ROWS):
+            if drawn >= n:
+                break
+            y = top_y + row_i * row_spacing_y
+            row_width = (row_size - 1) * icon_spacing_x
+            start_x = cx - row_width // 2
+            for slot in range(row_size):
+                if drawn >= n:
+                    break
+                x = start_x + slot * icon_spacing_x
+                self._draw_rocket_icon(x, y, height=3, color=color)
+                drawn += 1
+
+    def _draw_rocket_icon(self, x: int, base_y: int, height: int, color) -> None:
+        """A tiny rocket silhouette: a short body with a small forked base."""
+        pygame.draw.line(self.native, color, (x, base_y), (x, base_y - height))
+        pygame.draw.line(self.native, color, (x, base_y), (x - 1, base_y + 1))
+        pygame.draw.line(self.native, color, (x, base_y), (x + 1, base_y + 1))
 
     def _draw_missiles(self, game: Game, palette: Palette) -> None:
         for abm in game.missiles.abm_slots:
@@ -248,6 +317,24 @@ class Renderer:
         self.native.blit(high_surf, (SCREEN_WIDTH - high_surf.get_width() - 4, 2))
         wave_surf = font.render(f"WAVE {game.wave_number}", True, palette.text)
         self.native.blit(wave_surf, (SCREEN_WIDTH // 2 - wave_surf.get_width() // 2, 2))
+        self._draw_ammo_status_banner(game, palette)
+
+    def _draw_ammo_status_banner(self, game: Game, palette: Palette) -> None:
+        """"OUT"/"LOW" text banner at bottom-center, per the arcade HUD."""
+        if game.state != GameState.RUNNING:
+            return
+        counts = [s.abm_count for s in game.defenses.silos if not s.is_destroyed]
+        if not counts:
+            return
+        lowest = min(counts)
+        if lowest <= 0:
+            text = "OUT"
+        elif lowest <= SILO_LOW_THRESHOLD:
+            text = "LOW"
+        else:
+            return
+        surf = get_font(8).render(text, True, (60, 90, 230))
+        self.native.blit(surf, (SCREEN_WIDTH // 2 - surf.get_width() // 2, GROUND_Y + 1))
 
     def _draw_debug(self, game: Game) -> None:
         font = get_font(7)
