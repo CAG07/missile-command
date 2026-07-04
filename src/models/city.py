@@ -72,6 +72,7 @@ class CityManager:
     """
 
     cities: list[City] = field(default_factory=list)
+    num_cities: int = NUM_CITIES_DEFAULT  # starting city count (DIP switch: 4-7)
     bonus_cities: int = 0             # banked bonus cities (8-bit, wraps at 256)
     bonus_threshold: int = BONUS_CITY_POINTS
     cities_destroyed_this_wave: int = 0
@@ -84,8 +85,14 @@ class CityManager:
             self._init_cities()
 
     def _init_cities(self) -> None:
-        """Create the default set of cities from configuration."""
-        for i in range(min(NUM_CITIES_DEFAULT, len(CITY_POSITIONS))):
+        """Create the starting set of cities from configuration.
+
+        Only 6 city positions are modeled (matching the arcade's fixed
+        3-cities-per-side layout); a requested count of 7 is clamped to
+        6 since no 7th physical slot is defined for this recreation.
+        """
+        count = min(max(self.num_cities, 0), len(CITY_POSITIONS))
+        for i in range(count):
             pos = CITY_POSITIONS[i]
             self.cities.append(City(position_x=pos[0], position_y=pos[1]))
 

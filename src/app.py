@@ -23,17 +23,21 @@ except ImportError:
     pygame = None  # type: ignore[assignment]
 
 from src.config import (
+    BONUS_CITY_POINTS,
     CROSSHAIR_SENSITIVITY,
     DEFAULT_SCALE,
     GAME_OVER_DISPLAY_FRAMES,
     GROUND_Y,
+    NUM_CITIES_DEFAULT,
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
     UPDATE_RATE,
     WAVE_END_DISPLAY_FRAMES,
+    WAVE_INTRO_DISPLAY_FRAMES,
 )
 from src.attract import AttractDemo
 from src.game import Game, GameState
+from src.models.city import CityManager
 from src.ui.audio import AudioManager, SoundEvent
 from src.ui.audio_cues import AudioCueTracker
 from src.ui.high_scores import (
@@ -95,6 +99,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="N",
         help="Start at specific wave (for testing)",
     )
+    parser.add_argument(
+        "--mute", action="store_true",
+        help="Disable all audio",
+    )
+    parser.add_argument(
+        "--cities", type=int, default=NUM_CITIES_DEFAULT,
+        choices=range(4, 8), metavar="N",
+        help="Starting city count (4-7, default: 6)",
+    )
+    parser.add_argument(
+        "--bonus-interval", type=int, default=BONUS_CITY_POINTS,
+        choices=[0, 8000, 10000, 12000, 14000], metavar="N",
+        help="Bonus city point interval (0=off, 8000-14000, default: 10000)",
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--marathon", action="store_true", default=True,
@@ -122,6 +140,9 @@ class MissileCommandApp:
     debug: bool = False
     start_wave: int = 1
     tournament: bool = False
+    mute: bool = False
+    starting_cities: int = NUM_CITIES_DEFAULT
+    bonus_interval: int = BONUS_CITY_POINTS
 
     # Runtime state (initialized in ``init``)
     renderer: Renderer = field(default=None, repr=False)
@@ -143,6 +164,16 @@ class MissileCommandApp:
     tally_ticks_total: int = 0
     tally_ticks_done: int = 0
     tally_tick_frame_counter: int = 0
+
+    # Wave-intro screen ("WAVE N" + alarm before attacks begin)
+    _pending_wave_intro: bool = field(default=False, repr=False)
+    wave_intro_timer: int = 0
+
+    # Mouse-driven high-score initials entry (see _update_initials_entry)
+    _awaiting_initials: bool = field(default=False, repr=False)
+    _initials: list = field(default_factory=lambda: ["A", "A", "A"], repr=False)
+    _initials_slot: int = field(default=0, repr=False)
+    _initials_pending_score: int = field(default=0, repr=False)
 
     # Performance tracking
     frame_times: list[float] = field(default_factory=list)
@@ -196,9 +227,13 @@ class MissileCommandApp:
 
         # Load high scores and initialise audio
         self.high_scores = load_scores(self.scores_file)
+        if self.mute:
+            self.audio.enabled = False
         success = self.audio.init()
         if success:
             print("Audio system initialized successfully")
+        elif self.mute:
+            print("Audio muted via --mute")
         else:
             print("WARNING: Audio system failed to initialize - game will run silently")
 
@@ -206,6 +241,9 @@ class MissileCommandApp:
         self.game = Game()
         self.game.wave_number = self.start_wave
         self.game.score_display.high_score = get_top_score(self.high_scores)
+        self.game.cities = CityManager(
+            num_cities=self.starting_cities, bonus_threshold=self.bonus_interval,
+        )
         if self.tournament:
             self.game.cities.bonus_threshold = 0
 
@@ -273,8 +311,16 @@ class MissileCommandApp:
             self.audio.play(SoundEvent.CANT_FIRE)
 
     def _start_game_from_attract(self) -> None:
-        """Leave attract mode and begin a real game at wave 1."""
-        self.game.start_wave()
+        """Leave attract mode and show the wave intro before real play begins."""
+        self._begin_wave_intro()
+
+    def _begin_wave_intro(self) -> None:
+        """Show the "WAVE N" intro screen (alarm + warning) before the
+        next wave's attacks begin. Purely an app-level display phase --
+        the underlying Game doesn't gain a new state for this since
+        Game.update() already no-ops for any state other than RUNNING."""
+        self._pending_wave_intro = True
+        self.wave_intro_timer = WAVE_INTRO_DISPLAY_FRAMES
         self.audio.play(SoundEvent.WAVE_START)
 
     def _move_crosshair(self, rel: tuple[int, int]) -> None:
@@ -320,7 +366,10 @@ class MissileCommandApp:
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    self._fire_nearest()
+                    if self._awaiting_initials:
+                        self._initials_slot += 1
+                    else:
+                        self._fire_nearest()
 
         # Recenter the OS cursor each frame so relative motion keeps
         # working regardless of screen edges (trackball emulation).
@@ -345,6 +394,17 @@ class MissileCommandApp:
 
     def _update(self) -> None:
         """Run one frame of game logic."""
+        if self._awaiting_initials:
+            self._update_initials_entry()
+            return
+
+        if self._pending_wave_intro:
+            self.wave_intro_timer -= 1
+            if self.wave_intro_timer <= 0:
+                self._pending_wave_intro = False
+                self.game.start_wave()
+            return
+
         if self.game.state == GameState.ATTRACT:
             self.attract_demo.update()
             return
@@ -369,10 +429,12 @@ class MissileCommandApp:
                 score = self.game.score_display.player_score
                 score_pos = check_high_score(score, self.high_scores)
                 if score_pos > 0:
-                    name = self._prompt_initials()
-                    self.high_scores = update_high_scores(score, name, self.high_scores)
-                    save_high_scores(self.scores_file, self.high_scores)
-                self._reset_to_attract()
+                    self._initials = ["A", "A", "A"]
+                    self._initials_slot = 0
+                    self._initials_pending_score = score
+                    self._awaiting_initials = True
+                else:
+                    self._reset_to_attract()
             return
 
         if prev != GameState.WAVE_END and self.game.state == GameState.WAVE_END:
@@ -396,12 +458,34 @@ class MissileCommandApp:
                     self.audio.play(SoundEvent.TALLY_TICK)
             if self.wave_end_timer <= 0:
                 self.audio_cues.reset_for_new_wave()
-                self.game.start_wave()
-                self.audio.play(SoundEvent.WAVE_START)
+                self._begin_wave_intro()
             return
 
         if self.game.state == GameState.RUNNING:
             self.audio_cues.update(self.game, self.audio)
+
+    def _update_initials_entry(self) -> None:
+        """Advance the mouse-driven initials entry by one frame.
+
+        The currently-scrubbed letter is recomputed every frame from
+        ``crosshair_x``; a left click (handled in ``_handle_events``)
+        advances ``_initials_slot``. Once all 3 slots are confirmed,
+        save the score and return to attract mode.
+        """
+        charset = self.INITIALS_CHARSET
+        fraction = self.crosshair_x / SCREEN_WIDTH
+        idx = max(0, min(len(charset) - 1, int(fraction * len(charset))))
+        if self._initials_slot < 3:
+            self._initials[self._initials_slot] = charset[idx]
+            return
+
+        name = "".join(self._initials)
+        self.high_scores = update_high_scores(
+            self._initials_pending_score, name, self.high_scores,
+        )
+        save_high_scores(self.scores_file, self.high_scores)
+        self._awaiting_initials = False
+        self._reset_to_attract()
 
     @property
     def tally_displayed_score(self) -> int:
@@ -417,56 +501,15 @@ class MissileCommandApp:
         high_score = get_top_score(self.high_scores)
         self.game = Game()
         self.game.score_display.high_score = high_score
+        self.game.cities = CityManager(
+            num_cities=self.starting_cities, bonus_threshold=self.bonus_interval,
+        )
         if self.tournament:
             self.game.cities.bonus_threshold = 0
         self.attract_demo.restart()
 
     #: Selectable characters for trackball-style initials entry.
     INITIALS_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
-
-    def _prompt_initials(self) -> str:
-        """Let the player pick 3 initials via mouse-x + click (trackball style).
-
-        Moving the mouse scrubs a highlighted letter across
-        ``INITIALS_CHARSET``; a left click confirms it for the current
-        slot and advances to the next. Returns the 3-character string,
-        or ``"---"`` if the window is closed before any slot is confirmed.
-        """
-        if pygame is None or self.renderer is None or self.renderer.window is None:
-            return "---"
-
-        charset = self.INITIALS_CHARSET
-        initials = ["A", "A", "A"]
-        slot = 0
-
-        while slot < 3:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    return "".join(initials[:slot]) if slot > 0 else "---"
-                elif event.type == pygame.MOUSEMOTION:
-                    self._move_crosshair(event.rel)
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    slot += 1
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    return "".join(initials[:slot]) if slot > 0 else "---"
-
-            fraction = self.crosshair_x / SCREEN_WIDTH
-            idx = max(0, min(len(charset) - 1, int(fraction * len(charset))))
-            current_char = charset[idx]
-            if slot < 3:
-                initials[slot] = current_char
-
-            self._render_initials_entry(initials, slot, current_char)
-            self.renderer.present()
-
-            if self.renderer.window is not None:
-                win_w, win_h = self.renderer.window.get_size()
-                pygame.mouse.set_pos((win_w // 2, win_h // 2))
-
-            self.clock.tick(UPDATE_RATE)
-
-        return "".join(initials)
 
     def _render_initials_entry(
         self, initials: list[str], active_slot: int, current_char: str
@@ -496,7 +539,13 @@ class MissileCommandApp:
         if self.renderer is None:
             return
 
-        if self.game.state == GameState.ATTRACT:
+        if self._awaiting_initials:
+            fraction = self.crosshair_x / SCREEN_WIDTH
+            idx = max(0, min(len(self.INITIALS_CHARSET) - 1, int(fraction * len(self.INITIALS_CHARSET))))
+            self._render_initials_entry(self._initials, self._initials_slot, self.INITIALS_CHARSET[idx])
+        elif self._pending_wave_intro:
+            self._render_wave_intro_screen()
+        elif self.game.state == GameState.ATTRACT:
             # Show the autoplay demo running behind the attract overlay,
             # matching the arcade's live (not pre-recorded) demo mode.
             demo_game = self.attract_demo.game
@@ -513,6 +562,13 @@ class MissileCommandApp:
                 self._render_game_over()
 
         self.renderer.present()
+
+    def _render_wave_intro_screen(self) -> None:
+        """Draw the "WAVE N" intro screen over the current landscape."""
+        target = self._get_target()
+        self.renderer.draw_frame(self.game, target, self.game.frame_count, debug=self.debug)
+        self._center_text(f"WAVE {self.game.wave_number}", 10, 90)
+        self._center_text("GET READY", 7, 110)
 
     def _center_text(self, text: str, size: int, y: int, color=(255, 255, 255)) -> None:
         surf = get_font(size).render(text, True, color)

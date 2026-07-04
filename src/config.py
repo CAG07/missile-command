@@ -166,3 +166,4 @@ GROUND_Y: int = 220     # native-pixel Y of the ground line
 CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
 WAVE_END_DISPLAY_FRAMES: int = 180  # ~3s tally screen before the next wave
 GAME_OVER_DISPLAY_FRAMES: int = 120  # ~2s for the "THE END" animation to play
+WAVE_INTRO_DISPLAY_FRAMES: int = 90  # ~1.5s "WAVE N" intro before attacks begin

@@ -12,7 +12,13 @@ from src.app import (
     IRQ_PER_FRAME,
     TALLY_TICK_INTERVAL_FRAMES,
 )
-from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, WAVE_END_DISPLAY_FRAMES
+from src.config import (
+    GAME_OVER_DISPLAY_FRAMES,
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+    WAVE_END_DISPLAY_FRAMES,
+    WAVE_INTRO_DISPLAY_FRAMES,
+)
 from src.game import GameState
 
 
@@ -28,6 +34,9 @@ class TestParseArgs:
         assert args.wave == 1
         assert args.marathon is True
         assert args.tournament is False
+        assert args.mute is False
+        assert args.cities == 6
+        assert args.bonus_interval == 10000
 
     def test_fullscreen_flag(self):
         args = parse_args(["--fullscreen"])
@@ -61,6 +70,57 @@ class TestParseArgs:
     def test_marathon_tournament_mutually_exclusive(self):
         with pytest.raises(SystemExit):
             parse_args(["--marathon", "--tournament"])
+
+    def test_mute_flag(self):
+        args = parse_args(["--mute"])
+        assert args.mute is True
+
+    def test_cities_option(self):
+        for n in range(4, 8):
+            args = parse_args(["--cities", str(n)])
+            assert args.cities == n
+
+    def test_cities_option_rejects_out_of_range(self):
+        with pytest.raises(SystemExit):
+            parse_args(["--cities", "3"])
+        with pytest.raises(SystemExit):
+            parse_args(["--cities", "8"])
+
+    def test_bonus_interval_option(self):
+        for n in [0, 8000, 10000, 12000, 14000]:
+            args = parse_args(["--bonus-interval", str(n)])
+            assert args.bonus_interval == n
+
+    def test_bonus_interval_rejects_arbitrary_value(self):
+        with pytest.raises(SystemExit):
+            parse_args(["--bonus-interval", "9999"])
+
+
+class TestOperatorOptionsWiring:
+    """Tests that CLI operator options are stored and used to construct
+    a correctly-configured CityManager (see MissileCommandApp.init/
+    _reset_to_attract, which aren't independently unit-testable here
+    since they require a live pygame display)."""
+
+    def test_app_stores_operator_options(self):
+        app = MissileCommandApp(starting_cities=4, bonus_interval=8000, mute=True)
+        assert app.starting_cities == 4
+        assert app.bonus_interval == 8000
+        assert app.mute is True
+
+    def test_city_manager_honors_num_cities(self):
+        from src.models.city import CityManager
+        for n in range(4, 7):
+            assert len(CityManager(num_cities=n).cities) == n
+
+    def test_city_manager_num_cities_caps_at_six(self):
+        from src.models.city import CityManager
+        assert len(CityManager(num_cities=7).cities) == 6
+
+    def test_city_manager_honors_bonus_threshold(self):
+        from src.models.city import CityManager
+        cities = CityManager(bonus_threshold=12000)
+        assert cities.bonus_threshold == 12000
 
 
 # ── MissileCommandApp (without pygame) ──────────────────────────────────────
@@ -250,7 +310,12 @@ class TestTallyScreen:
         assert app.game.wave_number == wave_before + 1
         for _ in range(WAVE_END_DISPLAY_FRAMES + 1):
             app._update()
-        # start_wave() fires once the tally timer expires, re-entering
+        # Tally timer expiring enters the wave-intro screen, not RUNNING
+        # directly -- Game.start_wave() isn't called until that expires too.
+        assert app._pending_wave_intro is True
+        for _ in range(WAVE_INTRO_DISPLAY_FRAMES + 1):
+            app._update()
+        # start_wave() fires once the intro timer expires, re-entering
         # RUNNING for the same (already incremented) wave number.
         assert app.game.wave_number == wave_before + 1
         assert app.game.state == GameState.RUNNING
@@ -276,6 +341,9 @@ class TestAttractModeWiring:
         app = MissileCommandApp()
         demo_score_before = app.attract_demo.game.score_display.player_score
         app._start_game_from_attract()
+        assert app._pending_wave_intro is True
+        for _ in range(WAVE_INTRO_DISPLAY_FRAMES + 1):
+            app._update()
         assert app.game.state == GameState.RUNNING
         assert app.attract_demo.game.score_display.player_score == demo_score_before
 
@@ -285,3 +353,115 @@ class TestAttractModeWiring:
         app._reset_to_attract()
         assert app.attract_demo.game.score_display.player_score == 0
         assert app.attract_demo.game.state == GameState.RUNNING
+
+
+# ── Wave-intro screen ─────────────────────────────────────────────────────
+
+
+class TestWaveIntroScreen:
+    def test_begin_wave_intro_sets_pending_flag_and_timer(self):
+        app = MissileCommandApp()
+        app._begin_wave_intro()
+        assert app._pending_wave_intro is True
+        assert app.wave_intro_timer == WAVE_INTRO_DISPLAY_FRAMES
+
+    def test_game_state_unchanged_until_intro_expires(self):
+        app = MissileCommandApp()
+        app._begin_wave_intro()
+        for _ in range(WAVE_INTRO_DISPLAY_FRAMES - 1):
+            app._update()
+            assert app._pending_wave_intro is True
+
+    def test_start_wave_called_only_after_intro_expires(self):
+        app = MissileCommandApp()
+        app._begin_wave_intro()
+        for _ in range(WAVE_INTRO_DISPLAY_FRAMES + 1):
+            app._update()
+        assert app._pending_wave_intro is False
+        assert app.game.state == GameState.RUNNING
+
+    def test_wave_end_transitions_to_wave_intro_not_directly_to_running(self):
+        app = MissileCommandApp()
+        app.game.start_wave()
+        app.game.icbms_remaining_this_wave = 0
+        app._update()  # RUNNING -> WAVE_END
+        for _ in range(WAVE_END_DISPLAY_FRAMES + 1):
+            app._update()
+        assert app._pending_wave_intro is True
+        assert app.game.state == GameState.WAVE_END  # Game itself is unaware of the intro
+
+
+# ── Non-blocking high-score initials entry ───────────────────────────────
+
+
+class TestInitialsEntry:
+    def _force_qualifying_game_over(self, app, tmp_path):
+        # Never let a test app default to the real project scores.json.
+        app.scores_file = str(tmp_path / "scores.json")
+        app.high_scores = {str(i): {"name": "---", "score": 0} for i in range(1, 11)}
+        app.game.start_wave()
+        for city in app.game.cities.cities:
+            city.destroy()
+        app.game.cities.bonus_cities = 0
+        app.game.cities.bonus_threshold = 0
+        app.game.score_display.add(999999)
+        app._update()  # RUNNING -> GAME_OVER
+        for _ in range(GAME_OVER_DISPLAY_FRAMES + 1):
+            app._update()
+
+    def test_qualifying_score_enters_awaiting_initials(self, tmp_path):
+        app = MissileCommandApp()
+        self._force_qualifying_game_over(app, tmp_path)
+        assert app._awaiting_initials is True
+        assert app._initials_slot == 0
+
+    def test_non_qualifying_score_skips_initials_entry(self, tmp_path):
+        app = MissileCommandApp()
+        app.scores_file = str(tmp_path / "scores.json")
+        app.high_scores = {str(i): {"name": "---", "score": 0} for i in range(1, 11)}
+        app.game.start_wave()
+        for city in app.game.cities.cities:
+            city.destroy()
+        app.game.cities.bonus_cities = 0
+        app._update()  # RUNNING -> GAME_OVER (score 0, never qualifies)
+        for _ in range(GAME_OVER_DISPLAY_FRAMES + 1):
+            app._update()
+        assert app._awaiting_initials is False
+        assert app.game.state == GameState.ATTRACT
+
+    def test_scrubbing_selects_letter_from_crosshair_position(self, tmp_path):
+        app = MissileCommandApp()
+        self._force_qualifying_game_over(app, tmp_path)
+        app.crosshair_x = 0  # leftmost -> first char in charset
+        app._update()
+        assert app._initials[0] == app.INITIALS_CHARSET[0]
+
+    def test_three_clicks_confirm_and_save_score(self, tmp_path):
+        app = MissileCommandApp()
+        self._force_qualifying_game_over(app, tmp_path)
+        score = app._initials_pending_score
+
+        for _ in range(3):
+            app._initials_slot += 1  # simulate a left click
+            app._update()
+
+        assert app._awaiting_initials is False
+        assert app.game.state == GameState.ATTRACT
+        assert any(
+            record.get("score") == score for record in app.high_scores.values()
+        )
+
+    def test_left_click_routes_to_slot_advance_not_fire(self, tmp_path):
+        """Mirrors _handle_events' MOUSEBUTTONDOWN routing: while awaiting
+        initials, a left click must advance the slot, not fire an ABM.
+        (No live pygame event loop here -- see test files' existing
+        convention of exercising app methods directly.)"""
+        app = MissileCommandApp()
+        self._force_qualifying_game_over(app, tmp_path)
+        assert app._initials_slot == 0
+        if app._awaiting_initials:
+            app._initials_slot += 1
+        else:
+            app._fire_nearest()
+        assert app._initials_slot == 1
+        assert app.game.missiles.active_abm_count == 0

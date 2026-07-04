@@ -14,6 +14,9 @@ Options:
     --debug              Enable debug overlays
     --attract            Start in attract mode
     --wave N             Start at specific wave (testing)
+    --mute               Disable all audio
+    --cities N           Starting city count (4-7, default: 6)
+    --bonus-interval N   Bonus city point interval (0=off, 8000-14000, default: 10000)
     --marathon           Marathon mode (default)
     --tournament         Tournament mode (no bonus cities)
 
@@ -39,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
         debug=args.debug,
         start_wave=args.wave,
         tournament=args.tournament,
+        mute=args.mute,
+        starting_cities=args.cities,
+        bonus_interval=args.bonus_interval,
     )
 
     if not app.init():
