@@ -288,13 +288,21 @@ class Renderer:
         if flier is not None and flier.is_active:
             self._draw_flier(flier, palette)
 
+    #: Side-view jet silhouette (pointed nose, flat canopy top, vertical
+    #: tail fin, single swept wing below the fuselage) for a flier
+    #: facing right (+x); mirrored in X for direction < 0. A side-view
+    #: reads as "airplane" more clearly than a symmetric top-down dart
+    #: at the small pixel sizes this sprite renders at.
+    _FLIER_SHAPE_RIGHT_FACING = (
+        (7, 0), (2, -1), (-4, -1), (-6, -3),
+        (-7, 0), (-3, 4), (1, 1),
+    )
+
     def _draw_flier(self, flier: Flier, palette: Palette) -> None:
-        x, y = flier.current_pos
-        w = 5 if flier.direction > 0 else -5
-        pygame.draw.polygon(
-            self.native, palette.icbm_trail,
-            [(x - w, y), (x + w, y - 2), (x + w, y + 2)],
-        )
+        cx, cy = flier.current_pos
+        mirror = 1 if flier.direction > 0 else -1
+        points = [(cx + mirror * dx, cy + dy) for dx, dy in self._FLIER_SHAPE_RIGHT_FACING]
+        pygame.draw.polygon(self.native, palette.icbm_trail, points)
 
     def _draw_explosions(self, game: Game, frame_count: int) -> None:
         color = explosion_color(frame_count)
