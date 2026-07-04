@@ -94,10 +94,18 @@ POINTS_PER_SURVIVING_CITY: int = 100
 # Speeds increase each wave up to a cap.  Values are in 8.8 fixed-point
 # fractional units.  See disassembly for exact per-wave table.
 # ---------------------------------------------------------------------------
-WAVE_SPEEDS: list[int] = [
-    1, 1, 2, 2, 3, 3, 4, 4, 5, 5,
-    6, 6, 7, 7, 8, 8, 8, 8, 8, 8,
+# ICBM "speed" is NOT a velocity -- per the wave guide, it's the number of
+# frames the game waits between moving an ICBM at all (0 = moves every
+# frame, fastest; higher = longer pause between each 1-unit step). Stored
+# internally as an 8.8 fixed-point value added to a per-missile counter.
+# When a move *does* happen, it always advances by exactly 1 unit -- the
+# whole difficulty ramp comes from how often that happens, not step size.
+# Source: https://6502disassembly.com/va-missile-command/wave-guide.html
+ICBM_MOVE_DELAY_TABLE: list[float] = [
+    4.8125, 2.875, 1.75, 1.03, 0.625, 0.375, 0.25, 0.125,
+    0.0625, 0.04, 0.02, 0.016, 0.008, 0.004, 0.0,
 ]
+ICBM_BASE_STEP_SPEED: int = 1  # units advanced per actual move (constant)
 
 # ICBMs launched per wave (1-indexed by position; wave 20+ reuses the
 # last entry). Source: https://6502disassembly.com/va-missile-command/wave-guide.html

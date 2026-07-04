@@ -51,7 +51,7 @@ from src.utils.functions import (
     get_attack_pace_altitude,
     get_icbm_count_for_wave,
     get_score_multiplier,
-    get_wave_speed,
+    get_wave_move_delay,
 )
 
 
@@ -374,7 +374,7 @@ class Game:
         """Spawn either an ICBM or a SmartBomb from the wave's budget."""
         if self.icbms_remaining_this_wave <= 0:
             return False
-        speed = get_wave_speed(self.wave_number)
+        move_delay = get_wave_move_delay(self.wave_number)
         use_smart_bomb = (
             self.wave_number >= SMART_BOMB_START_WAVE
             and self.missiles.smart_bomb_count < MAX_SMART_BOMBS
@@ -385,13 +385,13 @@ class Game:
             missile = SmartBomb(
                 entry_x=entry_x, entry_y=entry_y,
                 target_x=target_x, target_y=target_y,
-                speed=speed, can_mirv=False,
+                move_delay=move_delay, can_mirv=False,
             )
         else:
             missile = ICBM(
                 entry_x=entry_x, entry_y=entry_y,
                 target_x=target_x, target_y=target_y,
-                speed=speed, can_mirv=True,
+                move_delay=move_delay, can_mirv=True,
             )
         if self.missiles.add_icbm(missile):
             self.icbms_remaining_this_wave -= 1
@@ -444,8 +444,8 @@ class Game:
             if self.icbms_remaining_this_wave > 0:
                 targets = self._pick_targets(1)
                 if targets:
-                    speed = get_wave_speed(self.wave_number)
-                    for shot in flier.fire(targets, speed=speed):
+                    move_delay = get_wave_move_delay(self.wave_number)
+                    for shot in flier.fire(targets, move_delay=move_delay):
                         if self.missiles.add_icbm(shot):
                             self.icbms_remaining_this_wave -= 1
             self.flier_fire_cooldown = flier.firing_timer
@@ -487,13 +487,13 @@ class Game:
         """Spawn an incoming ICBM if slots and wave budget allow."""
         if self.icbms_remaining_this_wave <= 0:
             return False
-        speed = get_wave_speed(self.wave_number)
+        move_delay = get_wave_move_delay(self.wave_number)
         icbm = ICBM(
             entry_x=entry_x,
             entry_y=entry_y,
             target_x=target_x,
             target_y=target_y,
-            speed=speed,
+            move_delay=move_delay,
             can_mirv=can_mirv,
         )
         if self.missiles.add_icbm(icbm):

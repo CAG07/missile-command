@@ -50,7 +50,7 @@ from src.utils.functions import (
     get_flier_wave_params,
     get_icbm_count_for_wave,
     get_score_multiplier,
-    get_wave_speed,
+    get_wave_move_delay,
 )
 
 
@@ -209,6 +209,60 @@ class TestICBM:
         old_pos = icbm.current_pos
         icbm.update()
         assert icbm.current_pos == old_pos
+
+    def test_zero_move_delay_moves_every_frame(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=0.0)
+        old_y = icbm.current_y
+        icbm.update()
+        assert icbm.current_y > old_y
+        old_y = icbm.current_y
+        icbm.update()
+        assert icbm.current_y > old_y
+
+    def test_positive_move_delay_holds_position_between_steps(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=4.0)
+        positions = []
+        for _ in range(3):
+            icbm.update()
+            positions.append(icbm.current_y)
+        # With a 4-frame delay (5-frame cycle), the missile shouldn't
+        # have moved yet after just 3 frames.
+        assert positions == [0, 0, 0]
+
+    def test_move_delay_average_cadence_matches_over_many_frames(self):
+        """A fractional delay should average out correctly over many
+        frames rather than collapsing to "every frame" (regression
+        test for a real bug found during the wave-1-difficulty fix:
+        a naive decrement-by-1 counter made any delay < 1 behave
+        identically, losing the distinction between e.g. waves 5, 8,
+        and 11). Counts actual step invocations directly rather than
+        inferring from position, since the per-step distance depends
+        on the fixed-point increment, not just "1 pixel"."""
+        delay = 0.625  # expect a step roughly every 1.625 frames
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=delay)
+        n_frames = 1000
+        step_count = 0
+        for _ in range(n_frames):
+            before = icbm.current_pos
+            icbm.update()
+            icbm.is_active = True  # ignore arrival; testing cadence only
+            if icbm.current_pos != before:
+                step_count += 1
+        expected_moves = n_frames / (delay + 1.0)
+        assert abs(step_count - expected_moves) / expected_moves < 0.05
+
+    def test_higher_move_delay_is_slower_than_lower_over_time(self):
+        fast = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=1000,
+                     speed=1, move_delay=0.02)
+        slow = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=1000,
+                     speed=1, move_delay=0.625)
+        for _ in range(200):
+            fast.update()
+            slow.update()
+        assert fast.current_y > slow.current_y
 
 
 # ── MIRV logic ──────────────────────────────────────────────────────────────
@@ -661,12 +715,16 @@ class TestScoreDisplay:
 
 
 class TestWaveHelpers:
-    def test_get_wave_speed_wave1(self):
-        assert get_wave_speed(1) == 1
+    def test_get_wave_move_delay_wave1_is_slow(self):
+        # Wave 1 waits ~4.8 frames between moves -- deliberately slow.
+        assert get_wave_move_delay(1) > 4.0
 
-    def test_get_wave_speed_clamps(self):
-        # Beyond table length should return last entry
-        assert get_wave_speed(100) == 8
+    def test_get_wave_move_delay_decreases_each_wave(self):
+        assert get_wave_move_delay(1) > get_wave_move_delay(2) > get_wave_move_delay(3)
+
+    def test_get_wave_move_delay_clamps_at_zero(self):
+        # Beyond table length should return the fastest (0 = every frame).
+        assert get_wave_move_delay(100) == 0.0
 
     def test_attack_pace_altitude(self):
         assert get_attack_pace_altitude(1) == 200

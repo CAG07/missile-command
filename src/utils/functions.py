@@ -19,9 +19,9 @@ from src.config import (
     FIXED_POINT_SHIFT,
     FLIER_WAVE_TABLE,
     ICBM_COUNT_TABLE,
+    ICBM_MOVE_DELAY_TABLE,
     POINTS_PER_REMAINING_ABM,
     POINTS_PER_SURVIVING_CITY,
-    WAVE_SPEEDS,
 )
 
 
@@ -53,10 +53,15 @@ def distance_approx(x1: int, y1: int, x2: int, y2: int) -> int:
 # ── Wave helpers ────────────────────────────────────────────────────────────
 
 
-def get_wave_speed(wave_number: int) -> int:
-    """Return the ICBM speed for a given wave (1-indexed)."""
-    idx = min(wave_number - 1, len(WAVE_SPEEDS) - 1)
-    return WAVE_SPEEDS[max(idx, 0)]
+def get_wave_move_delay(wave_number: int) -> float:
+    """Return the ICBM move-delay (frames waited between steps) for a wave.
+
+    0 means the missile advances every frame (fastest); higher values
+    make it wait longer between each 1-unit step (slower). See
+    ICBM_MOVE_DELAY_TABLE for the source and exact semantics.
+    """
+    idx = min(wave_number - 1, len(ICBM_MOVE_DELAY_TABLE) - 1)
+    return ICBM_MOVE_DELAY_TABLE[max(idx, 0)]
 
 
 def get_attack_pace_altitude(wave_number: int) -> int:

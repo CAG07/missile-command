@@ -29,7 +29,7 @@ from src.ui.text import ScoreDisplay
 from src.utils.functions import (
     calculate_wave_bonus,
     get_attack_pace_altitude,
-    get_wave_speed,
+    get_wave_move_delay,
 )
 
 
@@ -123,16 +123,17 @@ class TestWaveManagement:
         game.update()
         assert game.wave_number == 2
 
-    def test_wave_speed_increases(self):
-        assert get_wave_speed(1) < get_wave_speed(5)
+    def test_wave_move_delay_decreases(self):
+        # Higher wave = shorter delay between moves = faster/harder.
+        assert get_wave_move_delay(1) > get_wave_move_delay(5)
 
     def test_attack_pace_altitude(self):
         assert get_attack_pace_altitude(1) == 200
         assert get_attack_pace_altitude(11) == 180
         assert get_attack_pace_altitude(50) == 180  # clamped
 
-    def test_wave_speed_clamps(self):
-        assert get_wave_speed(100) == 8
+    def test_wave_move_delay_clamps_at_zero(self):
+        assert get_wave_move_delay(100) == 0.0
 
     def test_wave_1_initial_icbms(self):
         game = Game()
@@ -327,6 +328,7 @@ class TestArrivals:
         icbm = next(s for s in game.missiles.icbm_slots if s is not None)
         icbm.current_x_fp = cx << 8
         icbm.current_y_fp = cy << 8
+        icbm.move_wait_counter = icbm.move_delay  # force this frame's move to trigger
         game.icbms_remaining_this_wave = 0
         game.update()
         assert city.is_destroyed
@@ -341,6 +343,7 @@ class TestArrivals:
         icbm = next(s for s in game.missiles.icbm_slots if s is not None)
         icbm.current_x_fp = sx << 8
         icbm.current_y_fp = sy << 8
+        icbm.move_wait_counter = icbm.move_delay  # force this frame's move to trigger
         game.icbms_remaining_this_wave = 0
         game.update()
         assert silo.is_destroyed

@@ -29,7 +29,6 @@ from src.config import (
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
     MIRV_MAX_CHILDREN,
-    WAVE_SPEEDS,
 )
 from src.utils.functions import get_flier_wave_params
 
@@ -193,6 +192,11 @@ class ICBM:
     target_x: int
     target_y: int
     speed: int = 1
+    # Frames to wait between each 1-unit move step (0 = moves every frame,
+    # fastest). This -- not step magnitude -- is what the original wave
+    # difficulty ramp actually controls; see ICBM_MOVE_DELAY_TABLE.
+    move_delay: float = 0.0
+    move_wait_counter: float = field(default=0.0, repr=False)
     # Fixed-point position
     current_x_fp: int = 0
     current_y_fp: int = 0
@@ -210,6 +214,7 @@ class ICBM:
             self.target_x, self.target_y,
             self.speed,
         )
+        self.move_wait_counter = 0.0
 
     @property
     def current_x(self) -> int:
@@ -229,9 +234,30 @@ class ICBM:
         return (self.current_x, self.current_y)
 
     def update(self) -> None:
-        """Advance the ICBM one frame."""
+        """Advance the ICBM by one frame, respecting move_delay.
+
+        Uses a fractional accumulator (not a simple decrement) so
+        delays under 1 frame still average out correctly over many
+        frames instead of collapsing to "moves every frame" -- a plain
+        countdown can't distinguish a 0.02-frame delay from a
+        0.625-frame delay since both are consumed by a single -1 step.
+        Each frame contributes 1 unit; a move fires once the
+        accumulator reaches (move_delay + 1), carrying any remainder
+        into the next cycle so the *average* cadence matches move_delay
+        exactly even though individual gaps vary by a frame.
+        """
         if not self.is_active:
             return
+        self.move_wait_counter += 1.0
+        threshold = self.move_delay + 1.0
+        if self.move_wait_counter < threshold:
+            return
+        self.move_wait_counter -= threshold
+        self._step()
+
+    def _step(self) -> None:
+        """Apply exactly one movement step (called once move_delay has
+        elapsed)."""
         self.current_x_fp += self.x_increment
         self.current_y_fp += self.y_increment
         if has_passed_target(
@@ -300,6 +326,7 @@ class ICBM:
                 target_x=targets[i][0],
                 target_y=targets[i][1],
                 speed=self.speed,
+                move_delay=self.move_delay,
                 can_mirv=False,
             )
             children.append(child)
@@ -334,13 +361,24 @@ class SmartBomb(ICBM):
         self.evasion_active = len(self.nearby_explosions) > 0
 
     def update(self) -> None:
-        """Advance one frame, applying evasion if needed."""
+        """Advance one frame, applying evasion if needed.
+
+        Respects move_delay via the same fractional accumulator as
+        ICBM.update -- evading doesn't make a smart bomb move any more
+        often than its wave's pacing allows, only changes which
+        direction it moves.
+        """
         if not self.is_active:
             return
+        self.move_wait_counter += 1.0
+        threshold = self.move_delay + 1.0
+        if self.move_wait_counter < threshold:
+            return
+        self.move_wait_counter -= threshold
         if self.evasion_active and self.nearby_explosions:
             self._evade()
         else:
-            super().update()
+            self._step()
 
     def _evade(self) -> None:
         """Table-driven evasion: move toward target without
@@ -462,6 +500,7 @@ class Flier:
         self,
         targets: list[tuple[int, int]],
         speed: int = 1,
+        move_delay: float = 0.0,
     ) -> list[ICBM]:
         """Fire missiles downward toward *targets*."""
         missiles: list[ICBM] = []
@@ -475,6 +514,7 @@ class Flier:
                     target_x=t[0],
                     target_y=t[1],
                     speed=speed,
+                    move_delay=move_delay,
                 )
             )
         return missiles
