@@ -32,6 +32,7 @@ from src.config import (
     UPDATE_RATE,
     WAVE_END_DISPLAY_FRAMES,
 )
+from src.attract import AttractDemo
 from src.game import Game, GameState
 from src.ui.audio import AudioManager, SoundEvent
 from src.ui.audio_cues import AudioCueTracker
@@ -161,6 +162,9 @@ class MissileCommandApp:
     scores_file: str = "scores.json"
     _prev_state: GameState = GameState.ATTRACT
 
+    # Attract-mode autoplay demo (hidden Game the computer plays)
+    attract_demo: AttractDemo = field(default_factory=AttractDemo)
+
     # ── Initialisation ──────────────────────────────────────────────────
 
     def init(self) -> bool:
@@ -268,6 +272,11 @@ class MissileCommandApp:
         else:
             self.audio.play(SoundEvent.CANT_FIRE)
 
+    def _start_game_from_attract(self) -> None:
+        """Leave attract mode and begin a real game at wave 1."""
+        self.game.start_wave()
+        self.audio.play(SoundEvent.WAVE_START)
+
     def _move_crosshair(self, rel: tuple[int, int]) -> None:
         """Apply relative mouse motion to the crosshair (trackball emulation)."""
         scale = self.renderer.effective_scale if self.renderer else self.scale
@@ -303,8 +312,7 @@ class MissileCommandApp:
                 elif event.key == pygame.K_F11:
                     self.renderer.toggle_fullscreen()
                 elif event.key == pygame.K_1 and self.game.state == GameState.ATTRACT:
-                    self.game.start_wave()
-                    self.audio.play(SoundEvent.WAVE_START)
+                    self._start_game_from_attract()
                 else:
                     silo = _silo_key_map().get(event.key)
                     if silo is not None:
@@ -337,6 +345,10 @@ class MissileCommandApp:
 
     def _update(self) -> None:
         """Run one frame of game logic."""
+        if self.game.state == GameState.ATTRACT:
+            self.attract_demo.update()
+            return
+
         prev = self.game.state
         self.game.update()
 
@@ -407,6 +419,7 @@ class MissileCommandApp:
         self.game.score_display.high_score = high_score
         if self.tournament:
             self.game.cities.bonus_threshold = 0
+        self.attract_demo.restart()
 
     #: Selectable characters for trackball-style initials entry.
     INITIALS_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
@@ -483,15 +496,21 @@ class MissileCommandApp:
         if self.renderer is None:
             return
 
-        target = self._get_target()
-        self.renderer.draw_frame(self.game, target, self.game.frame_count, debug=self.debug)
-
         if self.game.state == GameState.ATTRACT:
+            # Show the autoplay demo running behind the attract overlay,
+            # matching the arcade's live (not pre-recorded) demo mode.
+            demo_game = self.attract_demo.game
+            self.renderer.draw_frame(
+                demo_game, self.attract_demo.crosshair_pos, demo_game.frame_count, debug=self.debug,
+            )
             self._render_attract()
-        elif self.game.state == GameState.WAVE_END:
-            self._render_wave_end()
-        elif self.game.state == GameState.GAME_OVER:
-            self._render_game_over()
+        else:
+            target = self._get_target()
+            self.renderer.draw_frame(self.game, target, self.game.frame_count, debug=self.debug)
+            if self.game.state == GameState.WAVE_END:
+                self._render_wave_end()
+            elif self.game.state == GameState.GAME_OVER:
+                self._render_game_over()
 
         self.renderer.present()
 
@@ -501,9 +520,23 @@ class MissileCommandApp:
         self.renderer.native.blit(surf, (x, y))
 
     def _render_attract(self) -> None:
-        self._center_text("MISSILE COMMAND", 10, 70)
-        self._center_text("PRESS 1 TO PLAY", 8, 110)
-        self._center_text(self.game.score_display.format_high_score(), 8, 140)
+        self._center_text("MISSILE COMMAND", 10, 20)
+        self._center_text("PRESS 1 TO PLAY", 7, 40)
+        self._render_high_score_table()
+
+    def _render_high_score_table(self) -> None:
+        """Draw the top-10 leaderboard, centered mid-screen."""
+        self._center_text("HIGH SCORES", 8, 130)
+        y = 145
+        for pos in [str(i) for i in range(1, 11)]:
+            record = self.high_scores.get(pos)
+            if not record:
+                continue
+            name = str(record.get("name", "---"))[:3].ljust(3)
+            score = int(record.get("score", 0) or 0)
+            line = f"{pos.rjust(2)}. {name}  {score:06d}"
+            self._center_text(line, 6, y)
+            y += 8
 
     def _render_wave_end(self) -> None:
         mult = self.game.multiplier

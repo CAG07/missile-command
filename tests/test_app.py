@@ -254,3 +254,34 @@ class TestTallyScreen:
         # RUNNING for the same (already incremented) wave number.
         assert app.game.wave_number == wave_before + 1
         assert app.game.state == GameState.RUNNING
+
+
+# ── Attract-mode autoplay demo wiring ────────────────────────────────────
+
+
+class TestAttractModeWiring:
+    def test_update_drives_demo_while_in_attract(self):
+        app = MissileCommandApp()
+        assert app.game.state == GameState.ATTRACT
+        before = app.attract_demo.game.frame_count
+        app._update()
+        assert app.attract_demo.game.frame_count == before + 1
+
+    def test_update_does_not_touch_idle_game_while_in_attract(self):
+        app = MissileCommandApp()
+        app._update()
+        assert app.game.frame_count == 0
+
+    def test_start_game_from_attract_leaves_demo_untouched(self):
+        app = MissileCommandApp()
+        demo_score_before = app.attract_demo.game.score_display.player_score
+        app._start_game_from_attract()
+        assert app.game.state == GameState.RUNNING
+        assert app.attract_demo.game.score_display.player_score == demo_score_before
+
+    def test_reset_to_attract_restarts_demo(self):
+        app = MissileCommandApp()
+        app.attract_demo.game.score_display.add(999)
+        app._reset_to_attract()
+        assert app.attract_demo.game.score_display.player_score == 0
+        assert app.attract_demo.game.state == GameState.RUNNING

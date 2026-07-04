@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from src.config import SCREEN_HEIGHT, SCREEN_WIDTH
 from src.game import Game, GameState
 from src.models.missile import from_fixed
 
@@ -28,6 +29,7 @@ class AttractDemo:
     """Owns a hidden :class:`Game` and plays it automatically."""
 
     game: Game = field(default_factory=Game)
+    crosshair_pos: tuple[int, int] = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     _engaged_ids: set = field(default_factory=set, repr=False)
 
     def __post_init__(self) -> None:
@@ -64,6 +66,7 @@ class AttractDemo:
             return
 
         target_x, target_y = self._predict_position(target, TARGET_LEAD_FRAMES)
+        self.crosshair_pos = (target_x, target_y)
         if self.game.fire_nearest(target_x, target_y):
             self._engaged_ids.add(id(target))
 
