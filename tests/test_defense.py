@@ -138,6 +138,39 @@ class TestCityUnit:
         assert mgr.active_count == 6
         assert mgr.bonus_cities == 0
 
+    def test_destroy_city_rejects_out_of_range_index(self):
+        mgr = CityManager()
+        assert mgr.destroy_city(-1) is False
+        assert mgr.destroy_city(len(mgr.cities)) is False
+
+    def test_destroy_city_rejects_already_destroyed(self):
+        mgr = CityManager()
+        assert mgr.destroy_city(0) is True
+        assert mgr.destroy_city(0) is False
+
+    def test_destroy_city_at_no_match_in_radius(self):
+        mgr = CityManager()
+        assert mgr.destroy_city_at(-1000, -1000) is False
+
+    def test_replace_random_crater_no_bonus_cities(self):
+        mgr = CityManager()
+        mgr.destroy_city(0)
+        assert mgr.bonus_cities == 0
+        assert mgr.replace_random_crater() is False
+
+    def test_replace_random_crater_no_craters(self):
+        mgr = CityManager()
+        mgr.bonus_cities = 1
+        assert mgr.replace_random_crater() is False
+
+    def test_num_cities_caps_at_six(self):
+        mgr = CityManager(num_cities=7)
+        assert len(mgr.cities) == 6
+
+    def test_num_cities_supports_four(self):
+        mgr = CityManager(num_cities=4)
+        assert len(mgr.cities) == 4
+
 
 # ── Bonus City Tests ────────────────────────────────────────────────────────
 

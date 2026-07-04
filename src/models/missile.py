@@ -47,11 +47,6 @@ def from_fixed(value: int) -> int:
     return value >> FIXED_POINT_SHIFT
 
 
-def fixed_mul(a: int, b: int) -> int:
-    """Multiply two 8.8 fixed-point values."""
-    return (a * b) >> FIXED_POINT_SHIFT
-
-
 def distance_approx(x1: int, y1: int, x2: int, y2: int) -> int:
     """Approximate distance capped at 255.
 

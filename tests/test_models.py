@@ -169,6 +169,14 @@ class TestABM:
                 break
         assert not abm.is_active
 
+    def test_update_is_noop_when_inactive(self):
+        abm = ABM(silo_index=1, start_x=128, start_y=220,
+                   target_x=128, target_y=50)
+        abm.deactivate()
+        old_pos = abm.current_pos
+        abm.update()
+        assert abm.current_pos == old_pos
+
 
 # ── ICBM ────────────────────────────────────────────────────────────────────
 
@@ -194,6 +202,13 @@ class TestICBM:
             if not icbm.is_active:
                 break
         assert not icbm.is_active
+
+    def test_update_is_noop_when_inactive(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200, speed=2)
+        icbm.deactivate()
+        old_pos = icbm.current_pos
+        icbm.update()
+        assert icbm.current_pos == old_pos
 
 
 # ── MIRV logic ──────────────────────────────────────────────────────────────
@@ -299,6 +314,26 @@ class TestSmartBomb:
         old_y = sb.current_y
         sb.update()
         assert sb.current_y > old_y
+
+    def test_update_is_noop_when_inactive(self):
+        sb = SmartBomb(
+            entry_x=100, entry_y=0, target_x=100, target_y=200, speed=2,
+        )
+        sb.deactivate()
+        old_pos = sb.current_pos
+        sb.update()
+        assert sb.current_pos == old_pos
+
+    def test_evade_picks_closest_of_multiple_explosions(self):
+        sb = SmartBomb(
+            entry_x=100, entry_y=100, target_x=100, target_y=220, speed=1,
+        )
+        # A far explosion and a near one -- evasion must react to the
+        # nearer one, not just the first in the list.
+        sb.detect_explosions([(100, 5), (105, 100)])
+        old_pos = sb.current_pos
+        sb.update()
+        assert sb.current_pos != old_pos
 
 
 # ── Slot Manager ────────────────────────────────────────────────────────────
@@ -544,11 +579,32 @@ class TestDefenseManager:
         mgr = DefenseManager()
         assert mgr.fire(1, 100, 50, MAX_ABM_SLOTS) is None
 
+    def test_fire_rejects_invalid_silo_index(self):
+        mgr = DefenseManager()
+        assert mgr.fire(-1, 100, 50, 0) is None
+        assert mgr.fire(len(mgr.silos), 100, 50, 0) is None
+
     def test_fire_nearest(self):
         mgr = DefenseManager()
         abm = mgr.fire_nearest(40, 50, 0)
         assert abm is not None
         assert abm.silo_index == 0  # left silo is nearest to x=40
+
+    def test_fire_nearest_respects_abm_limit(self):
+        mgr = DefenseManager()
+        assert mgr.fire_nearest(40, 50, MAX_ABM_SLOTS) is None
+
+    def test_fire_nearest_returns_none_when_all_silos_empty(self):
+        mgr = DefenseManager()
+        for silo in mgr.silos:
+            silo.abm_count = 0
+        assert mgr.fire_nearest(40, 50, 0) is None
+
+    def test_get_silo_valid_and_invalid(self):
+        mgr = DefenseManager()
+        assert mgr.get_silo(0) is mgr.silos[0]
+        assert mgr.get_silo(-1) is None
+        assert mgr.get_silo(len(mgr.silos)) is None
 
     def test_total_abm_count(self):
         mgr = DefenseManager()
