@@ -211,6 +211,46 @@ class TestSiloFiring:
         assert len(target) == 2
 
 
+class TestMouseButtonSiloMapping:
+    """Real arcade cabinet: one trackball + 3 dedicated fire buttons wired
+    to left/center/right battery, not a proximity/nearest-silo auto-select.
+    Drives actual pygame MOUSEBUTTONDOWN events through _handle_events
+    (not just calling _fire_silo directly) to verify the event routing
+    itself, since that's what a real player's click goes through."""
+
+    def _fire_via_mouse_button(self, app, button):
+        import pygame
+        pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=button, pos=(0, 0)))
+        app._handle_events()
+
+    def test_left_click_fires_left_silo(self):
+        app = MissileCommandApp()
+        app.init()
+        app.game.start_wave()
+        self._fire_via_mouse_button(app, 1)
+        abm = next(s for s in app.game.missiles.abm_slots if s is not None)
+        assert abm.silo_index == 0
+        app.shutdown()
+
+    def test_middle_click_fires_center_silo(self):
+        app = MissileCommandApp()
+        app.init()
+        app.game.start_wave()
+        self._fire_via_mouse_button(app, 2)
+        abm = next(s for s in app.game.missiles.abm_slots if s is not None)
+        assert abm.silo_index == 1
+        app.shutdown()
+
+    def test_right_click_fires_right_silo(self):
+        app = MissileCommandApp()
+        app.init()
+        app.game.start_wave()
+        self._fire_via_mouse_button(app, 3)
+        abm = next(s for s in app.game.missiles.abm_slots if s is not None)
+        assert abm.silo_index == 2
+        app.shutdown()
+
+
 class TestThreeSiloConfig:
     """Tests that the src model always initializes 3 silos."""
 
@@ -463,6 +503,6 @@ class TestInitialsEntry:
         if app._awaiting_initials:
             app._initials_slot += 1
         else:
-            app._fire_nearest()
+            app._fire_silo(0)
         assert app._initials_slot == 1
         assert app.game.missiles.active_abm_count == 0

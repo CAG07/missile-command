@@ -300,16 +300,6 @@ class MissileCommandApp:
             return
         self.audio.play(SoundEvent.FIRE_ABM)
 
-    def _fire_nearest(self) -> None:
-        """Fire from whichever silo has ammo and is nearest the crosshair."""
-        if self.game.state != GameState.RUNNING:
-            return
-        tx, ty = self._get_target()
-        if self.game.fire_nearest(tx, ty):
-            self.audio.play(SoundEvent.FIRE_ABM)
-        else:
-            self.audio.play(SoundEvent.CANT_FIRE)
-
     def _start_game_from_attract(self) -> None:
         """Leave attract mode and show the wave intro before real play begins."""
         self._begin_wave_intro()
@@ -332,6 +322,12 @@ class MissileCommandApp:
         self.crosshair_x = max(0, min(SCREEN_WIDTH - 1, self.crosshair_x))
         self.crosshair_y = max(0, min(GROUND_Y - 1, self.crosshair_y))
 
+    #: Mouse button -> silo index, mirroring the real cabinet's layout:
+    #: one shared trackball plus three dedicated fire buttons wired to
+    #: the left/center/right battery (not a proximity/nearest-silo
+    #: auto-select -- confirmed against the original hardware).
+    _MOUSE_BUTTON_SILO_MAP = {1: 0, 2: 1, 3: 2}
+
     def _handle_events(self) -> None:
         """Process pygame events.
 
@@ -342,8 +338,9 @@ class MissileCommandApp:
             1          -- start 1-player game (from attract mode)
 
         Mouse controls:
-            Relative motion -- move crosshair (trackball emulation)
-            Left button     -- fire from the nearest silo with ammo
+            Relative motion   -- move crosshair (trackball emulation)
+            Left/Middle/Right -- fire left/center/right silo (matches the
+                                  arcade cabinet's 3 dedicated fire buttons)
         """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -365,11 +362,13 @@ class MissileCommandApp:
                         self._fire_silo(silo)
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    if self._awaiting_initials:
+                if self._awaiting_initials:
+                    if event.button == 1:
                         self._initials_slot += 1
-                    else:
-                        self._fire_nearest()
+                else:
+                    silo = self._MOUSE_BUTTON_SILO_MAP.get(event.button)
+                    if silo is not None:
+                        self._fire_silo(silo)
 
         # Recenter the OS cursor each frame so relative motion keeps
         # working regardless of screen edges (trackball emulation).

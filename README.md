@@ -47,9 +47,11 @@ python main.py
 
 ### Mouse
 - **Relative motion**: move the crosshair (trackball emulation)
-- **Left click**: fire from whichever silo has ammo and is nearest the crosshair
+- **Left / Middle / Right click**: fire from the left / center / right silo,
+  matching the arcade cabinet's 3 dedicated fire buttons (not a
+  proximity/nearest-silo auto-select)
 - On the high-score initials screen: move the mouse to scrub the highlighted
-  letter, click to confirm each of the 3 initials
+  letter, left-click to confirm each of the 3 initials
 
 ## Gameplay
 

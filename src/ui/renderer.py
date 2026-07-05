@@ -181,27 +181,38 @@ class Renderer:
             (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y),
         )
         for silo in game.defenses.silos:
-            self._draw_silo_mound(silo.position_x, palette)
+            self._draw_silo_mound(silo.position_x, palette, silo.is_destroyed)
 
-    def _draw_silo_mound(self, cx: int, palette: Palette) -> None:
-        """Raised flat-topped plateau the silo's ammo rockets stand on."""
+    def _draw_silo_mound(self, cx: int, palette: Palette, destroyed: bool = False) -> None:
+        """Raised flat-topped plateau the silo's ammo rockets stand on.
+
+        Scorched/blackened when the silo is destroyed, so the wreckage
+        is visible at a glance instead of the mound looking untouched.
+        """
         hw = self._SILO_MOUND_HALF_WIDTH
         top_hw = self._SILO_MOUND_TOP_HALF_WIDTH
         h = self._SILO_MOUND_HEIGHT
+        color = palette.city_destroyed if destroyed else palette.ground
         pygame.draw.polygon(
-            self.native, palette.ground,
+            self.native, color,
             [
                 (cx - hw, GROUND_Y), (cx - top_hw, GROUND_Y - h),
                 (cx + top_hw, GROUND_Y - h), (cx + hw, GROUND_Y),
             ],
         )
 
+    #: Collapsed-rubble silhouette heights for a destroyed city -- same
+    #: footprint as an intact city (_CITY_TUFT_HEIGHTS) but crushed down
+    #: to read clearly as "flattened", not just recolored.
+    _CITY_RUBBLE_HEIGHTS = (2, 4, 2, 4, 2)
+
     def _draw_cities(self, game: Game, palette: Palette) -> None:
         for city in game.cities.cities:
             x, _ = city.position
             if city.is_destroyed:
-                pygame.draw.rect(
-                    self.native, palette.city_destroyed, (x - 6, GROUND_Y - 1, 12, 3),
+                self._draw_spiky_cluster(
+                    x, GROUND_Y, palette.city_destroyed,
+                    self._CITY_TUFT_SPREAD, self._CITY_RUBBLE_HEIGHTS,
                 )
             else:
                 self._draw_spiky_cluster(
@@ -227,8 +238,16 @@ class Renderer:
             x, _ = silo.position
             top_y = GROUND_Y - self._SILO_MOUND_HEIGHT
             if silo.is_destroyed:
-                pygame.draw.rect(
-                    self.native, palette.city_destroyed, (x - 8, top_y - 2, 16, 4),
+                # Mound is already darkened by _draw_silo_mound; mark the
+                # wreckage with a bright X so an empty-but-intact silo
+                # (0 ABMs left) is never confused with a destroyed one.
+                pygame.draw.line(
+                    self.native, (255, 255, 255),
+                    (x - 5, top_y - 4), (x + 5, top_y + 2), 1,
+                )
+                pygame.draw.line(
+                    self.native, (255, 255, 255),
+                    (x - 5, top_y + 2), (x + 5, top_y - 4), 1,
                 )
                 continue
             self._draw_ammo_rockets(x, top_y, silo.abm_count, palette)
