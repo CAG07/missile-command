@@ -321,6 +321,23 @@ class MissileCommandApp:
         self.crosshair_y += rel[1] * CROSSHAIR_SENSITIVITY / scale
         self.crosshair_x = max(0, min(SCREEN_WIDTH - 1, self.crosshair_x))
         self.crosshair_y = max(0, min(GROUND_Y - 1, self.crosshair_y))
+        if self._awaiting_initials and self._initials_slot < 3:
+            self._apply_crosshair_to_initials()
+
+    def _apply_crosshair_to_initials(self) -> None:
+        """Set the current initials slot's letter from crosshair_x.
+
+        Called only when an actual MOUSEMOTION event moves the
+        crosshair, not unconditionally every frame -- otherwise even
+        tiny incidental mouse jitter (the trackball-recenter trick
+        posts a motion event every frame) would silently overwrite a
+        keyboard-selected letter moments after it was set, which is
+        exactly why keyboard input previously appeared to do nothing.
+        """
+        charset = self.INITIALS_CHARSET
+        fraction = self.crosshair_x / SCREEN_WIDTH
+        idx = max(0, min(len(charset) - 1, int(fraction * len(charset))))
+        self._initials[self._initials_slot] = charset[idx]
 
     #: Mouse button -> silo index, mirroring the real cabinet's layout:
     #: one shared trackball plus three dedicated fire buttons wired to
@@ -378,9 +395,18 @@ class MissileCommandApp:
 
         # Recenter the OS cursor each frame so relative motion keeps
         # working regardless of screen edges (trackball emulation).
+        # set_pos() itself generates a synthetic MOUSEMOTION event (this
+        # is documented pygame/SDL behavior) that would otherwise be
+        # picked up as "real" motion on the *next* frame's event.get()
+        # call -- observed in practice as slow, continuous drift of the
+        # crosshair/highlighted initials letter even with the physical
+        # mouse completely untouched. All genuine motion from this
+        # frame was already consumed by the loop above, so it's safe
+        # to drop anything left in the MOUSEMOTION queue here.
         if self.renderer is not None and self.renderer.window is not None:
             win_w, win_h = self.renderer.window.get_size()
             pygame.mouse.set_pos((win_w // 2, win_h // 2))
+            pygame.event.clear(pygame.MOUSEMOTION)
 
     # ── IRQ simulation ──────────────────────────────────────────────────
 
@@ -470,18 +496,16 @@ class MissileCommandApp:
             self.audio_cues.update(self.game, self.audio)
 
     def _update_initials_entry(self) -> None:
-        """Advance the mouse-driven initials entry by one frame.
+        """Check whether initials entry is complete.
 
-        The currently-scrubbed letter is recomputed every frame from
-        ``crosshair_x``; a left click (handled in ``_handle_events``)
-        advances ``_initials_slot``. Once all 3 slots are confirmed,
+        The highlighted letter itself is set directly by whichever
+        input last touched it -- mouse motion (_apply_crosshair_to_initials)
+        or keyboard (_handle_initials_keydown) -- not recomputed here,
+        so neither input method fights the other every frame. Once all
+        3 slots are confirmed (advanced via a click or Return/Space),
         save the score and return to attract mode.
         """
-        charset = self.INITIALS_CHARSET
-        fraction = self.crosshair_x / SCREEN_WIDTH
-        idx = max(0, min(len(charset) - 1, int(fraction * len(charset))))
         if self._initials_slot < 3:
-            self._initials[self._initials_slot] = charset[idx]
             return
 
         name = "".join(self._initials)
@@ -494,24 +518,25 @@ class MissileCommandApp:
 
     def _handle_initials_keydown(self, key: int) -> None:
         """Keyboard alternative to mouse-scrubbing on the initials
-        screen. Left/Right recompute the current charset index (same
-        formula ``_update_initials_entry`` uses) and jump ``crosshair_x``
-        to the center of the adjacent bucket -- guarantees exactly a
-        1-index move regardless of where within the current bucket the
-        crosshair happens to sit, unlike adding a fixed step distance
-        (which is fragile to float rounding landing a hair short of, or
-        past, a bucket boundary). Return/Space confirms, mirroring a
-        left mouse click.
+        screen. Left/Right look up the current letter's position in
+        the charset and step it by one, writing straight to
+        ``_initials`` -- deliberately independent of ``crosshair_x``,
+        since a mouse-position-based implementation would get its
+        selection silently overwritten a moment later by the
+        trackball-recenter trick's per-frame motion event (posted even
+        when the physical mouse hasn't moved), which is exactly why an
+        earlier version of this appeared to "do nothing". Return/Space
+        confirms, mirroring a left mouse click.
         """
-        charset_len = len(self.INITIALS_CHARSET)
-        fraction = self.crosshair_x / SCREEN_WIDTH
-        idx = max(0, min(charset_len - 1, int(fraction * charset_len)))
-        if key == pygame.K_LEFT:
-            idx = max(0, idx - 1)
-            self.crosshair_x = (idx + 0.5) * SCREEN_WIDTH / charset_len
-        elif key == pygame.K_RIGHT:
-            idx = min(charset_len - 1, idx + 1)
-            self.crosshair_x = (idx + 0.5) * SCREEN_WIDTH / charset_len
+        charset = self.INITIALS_CHARSET
+        if key in (pygame.K_LEFT, pygame.K_RIGHT) and self._initials_slot < 3:
+            current = self._initials[self._initials_slot]
+            idx = charset.index(current) if current in charset else 0
+            if key == pygame.K_LEFT:
+                idx = max(0, idx - 1)
+            else:
+                idx = min(len(charset) - 1, idx + 1)
+            self._initials[self._initials_slot] = charset[idx]
         elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             self._initials_slot += 1
 

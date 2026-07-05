@@ -472,10 +472,17 @@ class TestInitialsEntry:
         assert app.game.state == GameState.ATTRACT
 
     def test_scrubbing_selects_letter_from_crosshair_position(self, tmp_path):
+        """The letter is set when mouse motion actually occurs
+        (_move_crosshair), not recomputed unconditionally every
+        _update() -- see _apply_crosshair_to_initials's docstring for
+        why (an unconditional per-frame recompute is what silently
+        broke keyboard input previously)."""
         app = MissileCommandApp()
         self._force_qualifying_game_over(app, tmp_path)
-        app.crosshair_x = 0  # leftmost -> first char in charset
-        app._update()
+        app.crosshair_x = SCREEN_WIDTH // 2
+        # Large enough relative motion to hit the left clamp regardless
+        # of scale/sensitivity.
+        app._move_crosshair((-SCREEN_WIDTH * 1000, 0))
         assert app._initials[0] == app.INITIALS_CHARSET[0]
 
     def test_three_clicks_confirm_and_save_score(self, tmp_path):
@@ -516,6 +523,10 @@ class TestInitialsEntry:
         app = MissileCommandApp()
         app.scores_file = str(tmp_path / "scores.json")
         assert app.init()
+        # Window creation queues its own stray MOUSEMOTION (e.g. cursor
+        # entering the window) that would otherwise get processed
+        # alongside the first posted test event and corrupt it.
+        pygame.event.clear()
         self._force_qualifying_game_over(app, tmp_path)
         return app
 
@@ -536,13 +547,9 @@ class TestInitialsEntry:
 
     def test_left_arrow_retreats_highlighted_letter(self, tmp_path):
         app = self._make_initialized_app(tmp_path)
-        app.crosshair_x = 100
-        app._update()
-        before = app._initials[0]
+        app._initials[0] = "M"  # known starting point, independent of the mouse
         self._press_key(app, pygame.K_LEFT)
-        app._update()
-        before_idx = app.INITIALS_CHARSET.index(before)
-        assert app.INITIALS_CHARSET.index(app._initials[0]) == before_idx - 1
+        assert app._initials[0] == "L"
         app.shutdown()
 
     def test_enter_confirms_and_advances_slot(self, tmp_path):
@@ -578,4 +585,41 @@ class TestInitialsEntry:
         app = self._make_initialized_app(tmp_path)
         self._press_key(app, pygame.K_RIGHT)
         assert app.game.missiles.active_abm_count == 0
+        app.shutdown()
+
+    def test_keyboard_selection_persists_across_idle_frames(self, tmp_path):
+        """Regression test: pygame.mouse.set_pos() (used every frame to
+        recenter the OS cursor for trackball emulation) itself
+        generates a synthetic MOUSEMOTION event. Without clearing it,
+        this was observed to slowly drift the highlighted letter away
+        from whatever a keyboard press had just selected, even with
+        the physical mouse completely untouched -- which is exactly
+        why keyboard input previously appeared not to work at all."""
+        app = self._make_initialized_app(tmp_path)
+        app._initials[0] = "M"
+        for _ in range(120):
+            app._handle_events()
+            app._update()
+        assert app._initials[0] == "M"
+
+        self._press_key(app, pygame.K_RIGHT)
+        assert app._initials[0] == "N"
+        for _ in range(120):
+            app._handle_events()
+            app._update()
+        assert app._initials[0] == "N"
+        app.shutdown()
+
+    def test_genuine_mouse_motion_still_moves_crosshair(self, tmp_path):
+        """Sanity check that clearing MOUSEMOTION after the recenter
+        doesn't also eat real user input -- only events queued by the
+        recenter itself (processed after the main event loop) are
+        affected, not motion from earlier in the same frame."""
+        app = self._make_initialized_app(tmp_path)
+        before = app.crosshair_x
+        pygame.event.post(pygame.event.Event(
+            pygame.MOUSEMOTION, pos=(300, 300), rel=(50, 0), buttons=(0, 0, 0),
+        ))
+        app._handle_events()
+        assert app.crosshair_x != before
         app.shutdown()
