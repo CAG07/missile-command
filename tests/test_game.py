@@ -301,6 +301,48 @@ class TestGameIntegration:
         assert state == GameState.RUNNING
 
 
+class TestMIRVWaveGate:
+    """Integration-level check that wave 1 never produces a MIRV split,
+    end to end through the real update loop (not just the isolated
+    check_mirv_conditions unit tests) -- regression test for a bug
+    where the game had no wave gate at all, letting every eligible
+    ICBM split from wave 1 onward."""
+
+    def test_no_mirv_children_during_full_wave_1(self):
+        game = Game()
+        game.start_wave()
+        assert game.wave_number == 1
+        for _ in range(3000):
+            if game.state != GameState.RUNNING:
+                break
+            game.update()
+            for missile in game.missiles.icbm_slots:
+                assert not (missile is not None and missile.has_mirved)
+
+    def test_mirv_mechanism_works_from_wave_2_in_isolation(self):
+        """Confirms the split mechanism itself is enabled from wave 2
+        onward. Uses a single, cleanly-eligible ICBM with nothing else
+        in the table rather than waiting for one to occur naturally
+        over N frames of full wave-2 play: with several ICBMs in
+        flight at once, the "no previously examined missile above
+        MIRV_ALTITUDE_HIGH" condition ($56d1) makes MIRVs legitimately
+        rare in practice (any missile further along than the 128-159
+        band blocks the rest), so asserting natural occurrence within
+        a fixed frame budget is flaky by nature of that gate, not a
+        sign of a broken mechanism."""
+        game = Game()
+        game.wave_number = 2
+        game.start_wave()
+        game.missiles.icbm_slots = [None] * len(game.missiles.icbm_slots)
+        icbm = ICBM(entry_x=200, entry_y=140, target_x=205, target_y=220,
+                    speed=1, move_delay=0.0, can_mirv=True)
+        game.missiles.icbm_slots[0] = icbm
+        game.icbms_remaining_this_wave = 5
+        game._process_mirv_splits()
+        assert icbm.has_mirved
+        assert game.missiles.active_icbm_count == 4  # parent + 3 children
+
+
 # ── Detonation / arrival Tests ──────────────────────────────────────────────
 
 

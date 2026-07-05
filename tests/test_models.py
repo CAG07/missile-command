@@ -122,17 +122,37 @@ class TestIncrements:
 
 
 class TestPassedTarget:
+    """has_passed_target requires BOTH axes to have crossed their target
+    (not either) -- see the function's docstring for the regression this
+    guards against: a missile that's crossed only one axis (e.g. X)
+    while the other (e.g. Y/altitude) is still far away is genuinely
+    still in flight, not arrived, even though the old any-axis check
+    would have exploded/destroyed something at that point."""
+
     def test_not_passed_yet(self):
         assert not has_passed_target(0, 0, 100, 100, 1, 1)
 
-    def test_passed_x(self):
-        assert has_passed_target(101, 50, 100, 100, 1, 1)
+    def test_x_passed_alone_is_not_arrived(self):
+        assert not has_passed_target(101, 50, 100, 100, 1, 1)
 
-    def test_passed_y(self):
-        assert has_passed_target(50, 101, 100, 100, 1, 1)
+    def test_y_passed_alone_is_not_arrived(self):
+        assert not has_passed_target(50, 101, 100, 100, 1, 1)
+
+    def test_both_passed_is_arrived(self):
+        assert has_passed_target(101, 101, 100, 100, 1, 1)
 
     def test_negative_direction(self):
-        assert has_passed_target(99, 50, 100, 100, -1, -1)
+        # Approaching from the upper-right: x decreasing toward 100,
+        # y increasing toward 100.
+        assert not has_passed_target(150, 50, 100, 100, -1, 1)  # neither yet
+        assert not has_passed_target(99, 50, 100, 100, -1, 1)   # x only
+        assert has_passed_target(99, 101, 100, 100, -1, 1)      # both
+
+    def test_zero_increment_axis_is_trivially_passed(self):
+        # dx == 0 (straight vertical flight): X never blocks arrival.
+        assert has_passed_target(100, 101, 100, 100, 0, 1)
+        # dy == 0 (straight horizontal flight): Y never blocks arrival.
+        assert has_passed_target(101, 100, 100, 100, 1, 0)
 
 
 # ── ABM ─────────────────────────────────────────────────────────────────────
@@ -282,6 +302,26 @@ class TestMIRV:
         assert ICBM.check_mirv_conditions(
             icbm, active_icbm_count=2,
             remaining_wave_icbms=5, any_above_high=False,
+        )
+
+    def test_mirv_blocked_on_wave_1(self):
+        """The shipped ROM's wave check at $56d1 is a documented bug
+        (compares wave < 1, always false); the disassembly's own
+        comment says it should be #$02. MIRVs must not appear on
+        wave 1, matching the intended design, not the shipped bug."""
+        icbm = self._make_icbm_at_altitude(140)  # otherwise fully eligible
+        assert not ICBM.check_mirv_conditions(
+            icbm, active_icbm_count=2,
+            remaining_wave_icbms=5, any_above_high=False,
+            wave_number=1,
+        )
+
+    def test_mirv_allowed_from_wave_2(self):
+        icbm = self._make_icbm_at_altitude(140)
+        assert ICBM.check_mirv_conditions(
+            icbm, active_icbm_count=2,
+            remaining_wave_icbms=5, any_above_high=False,
+            wave_number=2,
         )
 
     def test_mirv_below_range(self):

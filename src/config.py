@@ -88,6 +88,13 @@ MIRV_ALTITUDE_LOW: int = 128
 MIRV_ALTITUDE_HIGH: int = 159
 MIRV_MAX_CHILDREN: int = 3
 
+# First wave MIRVs are allowed to appear. The shipped ROM's own check at
+# $56d1 compares wave < 1 (always false), a documented off-by-one bug --
+# the disassembly's own comment on that line says it "should probably be
+# #$02". We implement the intended design (no MIRVs on wave 1), not the
+# shipped bug.
+MIRV_START_WAVE: int = 2
+
 # ---------------------------------------------------------------------------
 # Scoring (per original arcade)
 # ---------------------------------------------------------------------------

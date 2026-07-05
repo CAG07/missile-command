@@ -267,6 +267,7 @@ class Game:
                     active_icbm_count=self.missiles.active_icbm_count,
                     remaining_wave_icbms=self.icbms_remaining_this_wave,
                     any_above_high=seen_above_high,
+                    wave_number=self.wave_number,
                 )
                 if eligible:
                     targets = self._pick_targets(3)

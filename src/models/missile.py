@@ -29,6 +29,7 @@ from src.config import (
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
     MIRV_MAX_CHILDREN,
+    MIRV_START_WAVE,
     SCREEN_WIDTH,
 )
 from src.utils.functions import get_flier_wave_params
@@ -85,22 +86,39 @@ def compute_increments(
 def has_passed_target(
     cx: int, cy: int, tx: int, ty: int, x_inc: int, y_inc: int
 ) -> bool:
-    """Return True when the missile has moved past its target.
+    """Return True when the missile has moved past its target on BOTH axes.
 
-    Check is done per-axis: if the increment is positive and current
-    coordinate ≥ target (or negative and ≤ target) in *either* axis the
-    missile has arrived.  Exact precision is not required (matching the
-    original hardware behaviour).
+    Since x_inc and y_inc are always scaled by the same distance
+    denominator (see compute_increments), a missile moving in a
+    straight line reaches zero remaining distance on both axes at
+    approximately the same time -- so requiring both here (rather than
+    either) still arrives promptly in the overwhelmingly common case.
+    An axis with a zero increment (no movement needed on that axis) is
+    trivially considered "passed" so it never blocks arrival.
+
+    Regression note: this used to be an *any*-axis check, which let a
+    missile register as "arrived" -- exploding and destroying a
+    city/silo -- the moment just ONE axis crossed its target, even
+    while the other axis (typically altitude) was still 20-30+ pixels
+    away. That made hits look like they came "out of nowhere": the
+    explosion and crater appeared at the target while the actual
+    missile was still visibly airborne, nowhere near the ground.
     """
-    if x_inc > 0 and cx >= tx:
-        return True
-    if x_inc < 0 and cx <= tx:
-        return True
-    if y_inc > 0 and cy >= ty:
-        return True
-    if y_inc < 0 and cy <= ty:
-        return True
-    return False
+    if x_inc > 0:
+        x_passed = cx >= tx
+    elif x_inc < 0:
+        x_passed = cx <= tx
+    else:
+        x_passed = True
+
+    if y_inc > 0:
+        y_passed = cy >= ty
+    elif y_inc < 0:
+        y_passed = cy <= ty
+    else:
+        y_passed = True
+
+    return x_passed and y_passed
 
 
 # ── ABM (Anti-Ballistic Missile – player) ──────────────────────────────────
@@ -279,10 +297,17 @@ class ICBM:
         active_icbm_count: int,
         remaining_wave_icbms: int,
         any_above_high: bool,
+        wave_number: int = MIRV_START_WAVE,
     ) -> bool:
         """Return True if *icbm* may split (MIRV).
 
         Conditions (see $56d1):
+        0. wave_number >= MIRV_START_WAVE. The shipped ROM's own wave
+           check at $56d1 is a documented bug (compares wave < 1, which
+           is always false, so MIRVs could appear from wave 1 on) --
+           the disassembly's own comment on that line says it "should
+           probably be #$02", i.e. the intended design was no MIRVs on
+           wave 1. We implement the intended fix, not the shipped bug.
         1. Missile altitude is in range [MIRV_ALTITUDE_LOW, MIRV_ALTITUDE_HIGH].
         2. No previously examined missile is above MIRV_ALTITUDE_HIGH
            (i.e. lower Y value means higher on screen).
@@ -290,6 +315,8 @@ class ICBM:
         4. Unspent ICBMs remain for the wave.
         5. Missile has not already MIRVed.
         """
+        if wave_number < MIRV_START_WAVE:
+            return False
         if icbm.has_mirved or not icbm.can_mirv:
             return False
         alt = icbm.altitude
