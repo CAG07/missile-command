@@ -115,10 +115,22 @@ POINTS_PER_SURVIVING_CITY: int = 100
 # internally as an 8.8 fixed-point value added to a per-missile counter.
 # When a move *does* happen, it always advances by exactly 1 unit -- the
 # whole difficulty ramp comes from how often that happens, not step size.
-# Source: https://6502disassembly.com/va-missile-command/wave-guide.html
+#
+# NOTE: the wave-guide's own literal per-wave values (4.8125, 2.875, 1.75,
+# ...) were verified byte-for-byte against the source, but produce a ramp
+# that halves roughly every wave (wave 1 -> wave 3 in this game's terms is
+# a single ICBM's full-screen fall time going from ~21s to ~10s) -- too
+# steep per direct user playtesting feedback, despite matching the
+# documented table. Replaced with a deliberately gentler, hand-tuned curve
+# per that feedback: wave 1 slower (~40s full-screen fall), and the ramp
+# toward "fast" spread across all 15 waves instead of front-loaded into
+# the first 8. This is an intentional deviation from the literal
+# disassembly values, not a research error -- SPEC.md's "disassembly wins"
+# default is overridden here by explicit, repeated user direction after
+# hands-on testing.
 ICBM_MOVE_DELAY_TABLE: list[float] = [
-    4.8125, 2.875, 1.75, 1.03, 0.625, 0.375, 0.25, 0.125,
-    0.0625, 0.04, 0.02, 0.016, 0.008, 0.004, 0.0,
+    9.9, 7.7, 5.8, 4.5, 3.4, 2.5, 1.9, 1.3,
+    0.9, 0.6, 0.4, 0.25, 0.15, 0.06, 0.0,
 ]
 ICBM_BASE_STEP_SPEED: int = 1  # units advanced per actual move (constant)
 
