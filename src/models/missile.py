@@ -224,6 +224,17 @@ class ICBM:
     can_mirv: bool = False
     has_mirved: bool = False
     is_active: bool = True
+    # Set when an ABM explosion shoots this missile down mid-flight, as
+    # opposed to reaching its target naturally (see intercept()). Lets
+    # _process_arrivals() tell the two apart -- without this, a missile
+    # shot down high in the sky would still be sitting in the slot
+    # table (is_active=False) when the *next* frame's arrival check
+    # runs, since clear_inactive() doesn't free it until later that
+    # same frame, and would be wrongly treated as having reached its
+    # target: destroying the city/silo it was heading toward, and
+    # showing an explosion there, even though it never got near the
+    # ground. This was the actual cause of "damage out of nowhere".
+    intercepted: bool = False
 
     def __post_init__(self) -> None:
         self.current_x_fp = to_fixed(self.entry_x)
@@ -288,6 +299,12 @@ class ICBM:
 
     def deactivate(self) -> None:
         self.is_active = False
+
+    def intercept(self) -> None:
+        """Shot down mid-flight by an ABM explosion (as opposed to
+        reaching its own target). See the `intercepted` field."""
+        self.is_active = False
+        self.intercepted = True
 
     # MIRV ────────────────────────────────────────────────────────────────
 

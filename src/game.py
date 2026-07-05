@@ -192,7 +192,7 @@ class Game:
                     else POINTS_PER_ICBM
                 )
                 self.score_display.add(pts * self.multiplier)
-                slot.deactivate()
+                slot.intercept()
 
         # 8. Collision: explosions vs flier.
         flier = self.missiles.flier_slot
@@ -251,6 +251,13 @@ class Game:
 
         for missile in self.missiles.icbm_slots:
             if missile is not None and not missile.is_active:
+                if missile.intercepted:
+                    # Shot down mid-flight by the player -- not a ground
+                    # arrival. Its own explosion/collision was already
+                    # handled where it was intercepted; nothing further
+                    # to spawn here, and it must NOT count as reaching
+                    # its target (see ICBM.intercepted).
+                    continue
                 self.explosions.add(
                     Explosion(center_x=missile.target_x, center_y=missile.target_y)
                 )

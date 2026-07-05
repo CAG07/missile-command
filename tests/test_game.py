@@ -393,6 +393,86 @@ class TestArrivals:
         assert silo.is_destroyed
 
 
+class TestInterception:
+    """Regression tests for the actual cause of "damage out of nowhere":
+    an ICBM shot down mid-flight (far from its target) was left sitting
+    in the slot table with is_active=False after the collision step,
+    since clear_inactive() only runs earlier in the SAME frame, not
+    after collision detection. The NEXT frame's _process_arrivals()
+    would then see that inactive slot and treat it as having reached
+    its target naturally -- destroying the city/silo it had been
+    heading toward, and spawning an explosion there, even though the
+    missile was destroyed high in the air nowhere near the ground."""
+
+    def test_intercepted_icbm_does_not_destroy_its_target_city(self):
+        game = Game()
+        game.start_wave()
+        city = game.cities.active_cities[0]
+        cx, cy = city.position
+        game.spawn_icbm(cx, 0, cx, cy)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = cx << 8
+        icbm.current_y_fp = 50 << 8  # high in the air, nowhere near the ground
+        game.icbms_remaining_this_wave = 0
+
+        game.explosions.add(
+            Explosion(center_x=cx, center_y=50, max_radius=13, expand_rate=13)
+        )
+        for _ in range(5):
+            game.update()
+
+        assert icbm.intercepted
+        assert not city.is_destroyed
+
+    def test_intercepted_icbm_does_not_destroy_its_target_silo(self):
+        game = Game()
+        game.start_wave()
+        silo = game.defenses.silos[0]
+        sx, sy = silo.position
+        game.spawn_icbm(sx, 0, sx, sy)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = sx << 8
+        icbm.current_y_fp = 50 << 8
+        game.icbms_remaining_this_wave = 0
+
+        game.explosions.add(
+            Explosion(center_x=sx, center_y=50, max_radius=13, expand_rate=13)
+        )
+        for _ in range(5):
+            game.update()
+
+        assert icbm.intercepted
+        assert not silo.is_destroyed
+
+    def test_intercept_marks_flag_deactivate_does_not(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200, speed=1)
+        icbm.deactivate()
+        assert icbm.is_active is False
+        assert icbm.intercepted is False
+
+        icbm2 = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200, speed=1)
+        icbm2.intercept()
+        assert icbm2.is_active is False
+        assert icbm2.intercepted is True
+
+    def test_naturally_arrived_icbm_still_destroys_target(self):
+        """Sanity check that the fix didn't break the normal ground-hit
+        path -- only genuinely intercepted missiles are skipped."""
+        game = Game()
+        game.start_wave()
+        city = game.cities.active_cities[0]
+        cx, cy = city.position
+        game.spawn_icbm(cx, 0, cx, cy)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = cx << 8
+        icbm.current_y_fp = cy << 8
+        icbm.move_wait_counter = icbm.move_delay
+        game.icbms_remaining_this_wave = 0
+        game.update()
+        assert not icbm.intercepted
+        assert city.is_destroyed
+
+
 class TestGroundCratering:
     """Any explosion (ABM or ICBM) that visually touches the ground line
     permanently scars the terrain there, whether or not it destroyed a
