@@ -13,8 +13,10 @@ from src.config import (
     EXPLOSION_GROUPS,
     EXPLOSION_MAX_RADIUS,
     FLIER_START_WAVE,
+    GROUND_Y,
     MAX_ABM_SLOTS,
     MAX_CITIES_DESTROYED_PER_WAVE,
+    MAX_GROUND_CRATERS,
     MAX_ICBM_SLOTS,
     POINTS_PER_FLIER,
     POINTS_PER_ICBM,
@@ -389,6 +391,65 @@ class TestArrivals:
         game.icbms_remaining_this_wave = 0
         game.update()
         assert silo.is_destroyed
+
+
+class TestGroundCratering:
+    """Any explosion (ABM or ICBM) that visually touches the ground line
+    permanently scars the terrain there, whether or not it destroyed a
+    city/silo -- matches the original arcade's persistent battlefield
+    damage, including near-misses on open ground."""
+
+    def test_icbm_impact_craters_ground(self):
+        game = Game()
+        game.start_wave()
+        game.spawn_icbm(100, 0, 100, GROUND_Y)
+        icbm = next(s for s in game.missiles.icbm_slots if s is not None)
+        icbm.current_x_fp = 100 << 8
+        icbm.current_y_fp = GROUND_Y << 8
+        icbm.move_wait_counter = icbm.move_delay
+        game.icbms_remaining_this_wave = 0
+        game.update()
+        assert 100 in game.ground_craters
+
+    def test_abm_intercept_near_ground_craters(self):
+        game = Game()
+        game.start_wave()
+        game.icbms_remaining_this_wave = 0
+        game.fire_from_silo(1, 128, GROUND_Y)
+        abm = next(s for s in game.missiles.abm_slots if s is not None)
+        abm.current_x_fp = 128 << 8
+        abm.current_y_fp = GROUND_Y << 8
+        game.update()
+        assert 128 in game.ground_craters
+
+    def test_abm_intercept_high_altitude_does_not_crater(self):
+        game = Game()
+        game.start_wave()
+        game.icbms_remaining_this_wave = 0
+        game.fire_from_silo(1, 128, 20)
+        abm = next(s for s in game.missiles.abm_slots if s is not None)
+        abm.current_x_fp = 128 << 8
+        abm.current_y_fp = 20 << 8
+        game.update()
+        assert 128 not in game.ground_craters
+
+    def test_craters_persist_across_wave_start(self):
+        game = Game()
+        game.start_wave()
+        game.ground_craters.append(77)
+        game.icbms_remaining_this_wave = 0
+        game.update()  # ends wave 1
+        game.start_wave()
+        assert 77 in game.ground_craters
+
+    def test_craters_capped_with_fifo_eviction(self):
+        game = Game()
+        game.start_wave()
+        for i in range(MAX_GROUND_CRATERS + 10):
+            game._maybe_crater_ground(i, GROUND_Y, 0)
+        assert len(game.ground_craters) == MAX_GROUND_CRATERS
+        assert game.ground_craters[0] == 10  # oldest 10 evicted FIFO
+        assert game.ground_craters[-1] == MAX_GROUND_CRATERS + 9
 
 
 # ── Attack Pacing Tests ──────────────────────────────────────────────────

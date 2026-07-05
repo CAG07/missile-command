@@ -187,6 +187,13 @@ FIXED_POINT_SCALE: int = 1 << FIXED_POINT_SHIFT  # 256
 DEFAULT_SCALE: int = 3  # integer upscale factor for the 256x231 native surface
 GROUND_Y: int = 220     # native-pixel Y of the ground line
 CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
+
+# Ground scarring: any explosion (ABM or ICBM) that visually touches the
+# ground line permanently bites a small crater out of the terrain there,
+# whether or not it destroyed a city/silo -- matches the original arcade's
+# persistent battlefield-scarring look.
+GROUND_CRATER_RADIUS: int = 5
+MAX_GROUND_CRATERS: int = 60  # oldest craters evicted FIFO beyond this
 WAVE_END_DISPLAY_FRAMES: int = 180  # ~3s tally screen before the next wave
 GAME_OVER_DISPLAY_FRAMES: int = 120  # ~2s for the "THE END" animation to play
 WAVE_INTRO_DISPLAY_FRAMES: int = 90  # ~1.5s "WAVE N" intro before attacks begin

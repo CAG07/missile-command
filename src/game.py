@@ -19,9 +19,12 @@ from typing import Optional
 
 from src.config import (
     ATTACK_BATCH_SIZE,
+    EXPLOSION_MAX_RADIUS,
     FLIER_INITIAL_DELAY_FRAMES,
     FLIER_START_WAVE,
+    GROUND_Y,
     MAX_CITIES_DESTROYED_PER_WAVE,
+    MAX_GROUND_CRATERS,
     MAX_ICBM_SLOTS,
     MAX_SMART_BOMBS,
     MIRV_ALTITUDE_HIGH,
@@ -94,6 +97,11 @@ class Game:
     last_wave_bonus: int = 0
     last_wave_surviving_cities: int = 0
     last_wave_remaining_abms: int = 0
+
+    # Persistent terrain scarring: X positions of ground craters bitten
+    # by explosions that touched the ground line. Not reset per wave --
+    # lasts the whole game, matching the original arcade.
+    ground_craters: list[int] = field(default_factory=list)
 
     # ── Wave lifecycle ──────────────────────────────────────────────────
 
@@ -239,15 +247,31 @@ class Game:
         for abm in self.missiles.abm_slots:
             if abm is not None and not abm.is_active:
                 self.explosions.add(Explosion(center_x=abm.target_x, center_y=abm.target_y))
+                self._maybe_crater_ground(abm.target_x, abm.target_y, EXPLOSION_MAX_RADIUS)
 
         for missile in self.missiles.icbm_slots:
             if missile is not None and not missile.is_active:
                 self.explosions.add(
                     Explosion(center_x=missile.target_x, center_y=missile.target_y)
                 )
+                self._maybe_crater_ground(
+                    missile.target_x, missile.target_y, EXPLOSION_MAX_RADIUS
+                )
                 hit_city = self.cities.destroy_city_at(missile.target_x, missile.target_y)
                 if not hit_city:
                     self.defenses.destroy_silo_at(missile.target_x, missile.target_y)
+
+    def _maybe_crater_ground(self, x: int, y: int, radius: int) -> None:
+        """Permanently scar the terrain at *x* if this explosion's blast
+        visually reaches the ground line, whether or not it destroyed a
+        city/silo -- matches the original arcade's persistent
+        battlefield damage, including near-misses on open ground.
+        """
+        if y + radius < GROUND_Y:
+            return
+        self.ground_craters.append(x)
+        if len(self.ground_craters) > MAX_GROUND_CRATERS:
+            self.ground_craters.pop(0)
 
     # ── MIRV ──────────────────────────────────────────────────────────────
 

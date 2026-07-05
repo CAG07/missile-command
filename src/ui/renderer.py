@@ -20,6 +20,7 @@ from typing import Optional
 import pygame
 
 from src.config import (
+    GROUND_CRATER_RADIUS,
     GROUND_Y,
     MAX_ABM_SLOTS,
     MAX_ICBM_SLOTS,
@@ -180,8 +181,21 @@ class Renderer:
             self.native, palette.ground,
             (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y),
         )
+        for x in game.ground_craters:
+            self._draw_ground_crater(x, palette)
         for silo in game.defenses.silos:
             self._draw_silo_mound(silo.position_x, palette, silo.is_destroyed)
+
+    def _draw_ground_crater(self, cx: int, palette: Palette) -> None:
+        """A permanent wedge bitten out of the ground line by an
+        explosion that touched down there -- whether or not it
+        destroyed a city/silo, matching the original arcade's
+        persistent terrain scarring."""
+        r = GROUND_CRATER_RADIUS
+        pygame.draw.polygon(
+            self.native, palette.sky,
+            [(cx - r, GROUND_Y), (cx + r, GROUND_Y), (cx, GROUND_Y + r)],
+        )
 
     def _draw_silo_mound(self, cx: int, palette: Palette, destroyed: bool = False) -> None:
         """Raised flat-topped plateau the silo's ammo rockets stand on.
