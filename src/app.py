@@ -341,6 +341,10 @@ class MissileCommandApp:
             Relative motion   -- move crosshair (trackball emulation)
             Left/Middle/Right -- fire left/center/right silo (matches the
                                   arcade cabinet's 3 dedicated fire buttons)
+
+        High-score initials entry (keyboard alternative to mouse-scrub):
+            Left / Right -- cycle the highlighted character
+            Return/Space -- confirm it and advance to the next slot
         """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -354,6 +358,8 @@ class MissileCommandApp:
                     self.running = False
                 elif event.key == pygame.K_F11:
                     self.renderer.toggle_fullscreen()
+                elif self._awaiting_initials:
+                    self._handle_initials_keydown(event.key)
                 elif event.key == pygame.K_1 and self.game.state == GameState.ATTRACT:
                     self._start_game_from_attract()
                 else:
@@ -485,6 +491,29 @@ class MissileCommandApp:
         save_high_scores(self.scores_file, self.high_scores)
         self._awaiting_initials = False
         self._reset_to_attract()
+
+    def _handle_initials_keydown(self, key: int) -> None:
+        """Keyboard alternative to mouse-scrubbing on the initials
+        screen. Left/Right recompute the current charset index (same
+        formula ``_update_initials_entry`` uses) and jump ``crosshair_x``
+        to the center of the adjacent bucket -- guarantees exactly a
+        1-index move regardless of where within the current bucket the
+        crosshair happens to sit, unlike adding a fixed step distance
+        (which is fragile to float rounding landing a hair short of, or
+        past, a bucket boundary). Return/Space confirms, mirroring a
+        left mouse click.
+        """
+        charset_len = len(self.INITIALS_CHARSET)
+        fraction = self.crosshair_x / SCREEN_WIDTH
+        idx = max(0, min(charset_len - 1, int(fraction * charset_len)))
+        if key == pygame.K_LEFT:
+            idx = max(0, idx - 1)
+            self.crosshair_x = (idx + 0.5) * SCREEN_WIDTH / charset_len
+        elif key == pygame.K_RIGHT:
+            idx = min(charset_len - 1, idx + 1)
+            self.crosshair_x = (idx + 0.5) * SCREEN_WIDTH / charset_len
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            self._initials_slot += 1
 
     @property
     def tally_displayed_score(self) -> int:

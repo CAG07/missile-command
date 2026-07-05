@@ -3,6 +3,7 @@ Tests for src/app.py -- application initialization, argument parsing,
 input handling, and the wave-end tally screen.
 """
 
+import pygame
 import pytest
 
 from src.app import (
@@ -506,3 +507,75 @@ class TestInitialsEntry:
             app._fire_silo(0)
         assert app._initials_slot == 1
         assert app.game.missiles.active_abm_count == 0
+
+    def _make_initialized_app(self, tmp_path):
+        """A pygame.event.post-capable app: init() must run with
+        scores_file already pointed at the tmp path, since init()
+        itself calls load_scores(self.scores_file) -- otherwise it
+        would touch the real project scores.json."""
+        app = MissileCommandApp()
+        app.scores_file = str(tmp_path / "scores.json")
+        assert app.init()
+        self._force_qualifying_game_over(app, tmp_path)
+        return app
+
+    def _press_key(self, app, key):
+        import pygame
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key))
+        app._handle_events()
+
+    def test_right_arrow_advances_highlighted_letter(self, tmp_path):
+        app = self._make_initialized_app(tmp_path)
+        app.crosshair_x = 0
+        app._update()
+        assert app._initials[0] == app.INITIALS_CHARSET[0]
+        self._press_key(app, pygame.K_RIGHT)
+        app._update()
+        assert app._initials[0] == app.INITIALS_CHARSET[1]
+        app.shutdown()
+
+    def test_left_arrow_retreats_highlighted_letter(self, tmp_path):
+        app = self._make_initialized_app(tmp_path)
+        app.crosshair_x = 100
+        app._update()
+        before = app._initials[0]
+        self._press_key(app, pygame.K_LEFT)
+        app._update()
+        before_idx = app.INITIALS_CHARSET.index(before)
+        assert app.INITIALS_CHARSET.index(app._initials[0]) == before_idx - 1
+        app.shutdown()
+
+    def test_enter_confirms_and_advances_slot(self, tmp_path):
+        app = self._make_initialized_app(tmp_path)
+        assert app._initials_slot == 0
+        self._press_key(app, pygame.K_RETURN)
+        assert app._initials_slot == 1
+        app.shutdown()
+
+    def test_space_confirms_and_advances_slot(self, tmp_path):
+        app = self._make_initialized_app(tmp_path)
+        assert app._initials_slot == 0
+        self._press_key(app, pygame.K_SPACE)
+        assert app._initials_slot == 1
+        app.shutdown()
+
+    def test_three_enters_confirm_and_save_score(self, tmp_path):
+        app = self._make_initialized_app(tmp_path)
+        score = app._initials_pending_score
+        for _ in range(3):
+            self._press_key(app, pygame.K_RETURN)
+            app._update()
+        assert app._awaiting_initials is False
+        assert app.game.state == GameState.ATTRACT
+        assert any(
+            record.get("score") == score for record in app.high_scores.values()
+        )
+        app.shutdown()
+
+    def test_arrow_keys_do_not_fire_or_move_crosshair_via_silo_keys(self, tmp_path):
+        """Left/Right must be dedicated to initials navigation while
+        awaiting initials, not fall through to silo-fire bindings."""
+        app = self._make_initialized_app(tmp_path)
+        self._press_key(app, pygame.K_RIGHT)
+        assert app.game.missiles.active_abm_count == 0
+        app.shutdown()

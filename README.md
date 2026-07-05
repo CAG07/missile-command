@@ -44,6 +44,8 @@ python main.py
 - **1** (from the attract screen): start a game
 - **F11**: toggle fullscreen
 - **ESC**: quit
+- On the high-score initials screen: **Left / Right** cycles the highlighted
+  character, **Return** or **Space** confirms it and advances to the next slot
 
 ### Mouse
 - **Relative motion**: move the crosshair (trackball emulation)
