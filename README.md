@@ -102,7 +102,8 @@ screen counts up the bonus tick by tick before the next wave begins.
   `$5379`/`$56d1`: an eligible missile must be in the 128–159 altitude band
   with nothing already seen above 159, and slots/wave-budget must remain
 - Smart bombs move like ordinary missiles until an explosion is nearby, then
-  evade without changing target; capped at 2 on screen at once
+  evade without changing target; capped at 2 on screen at once. These are distinct green lines
+  instead of the dots that represent smart bombs in the original game
 - Fliers (bomber or satellite) appear from wave 2, fly at a per-wave altitude
   band, and periodically release ICBMs of their own
 - **Mercy rule**: the player never loses more than 3 cities in a single wave;
