@@ -394,7 +394,7 @@ class Renderer:
         self._draw_ammo_status_banner(game, palette)
 
     def _draw_ammo_status_banner(self, game: Game, palette: Palette) -> None:
-        """"OUT"/"LOW" text banner at bottom-center, per the arcade HUD."""
+        """'OUT'/'LOW' text banner at bottom-center, per the arcade HUD."""
         if game.state != GameState.RUNNING:
             return
         counts = [s.abm_count for s in game.defenses.silos if not s.is_destroyed]
