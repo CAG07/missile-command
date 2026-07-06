@@ -122,15 +122,100 @@ python main.py [OPTIONS]
 
 Options:
   --fullscreen         Launch in fullscreen mode
-  --scale N            Display scale multiplier (1-4, default: 3)
-  --debug              Enable debug overlays (FPS, slot counts)
-  --attract            Start in attract mode (default)
-  --wave N             Start at a specific wave (for testing)
-  --mute               Disable all audio
-  --cities N           Starting city count (4-7, default: 6)
-  --bonus-interval N   Bonus city point interval (0=off, 8000-14000, default: 10000)
-  --marathon           Marathon mode (default): bonus cities enabled
-  --tournament         Tournament mode: bonus cities disabled
+  --scale N            Display scale multiplier (1-4, default: 2)
+  --debug              Enable debug overlays
+  --attract            Start in attract mode
+  --wave N             Start at specific wave (testing)
+  --marathon           Marathon mode (default)
+  --tournament         Tournament mode (no bonus cities)
+  --help               Show help message
+```
+
+## Technical Details
+
+### Architecture
+Based on the original arcade hardware:
+- **CPU**: 6502 running at ~1.25 MHz
+- **Display**: 256x231 resolution
+- **Frame Rate**: 60Hz
+- **IRQ Rate**: 240Hz (4x per frame)
+- **Video RAM**: 16KB (2bpp/3bpp hybrid)
+- **Sound**: POKEY chip (4 channels)
+
+### Game Logic
+
+#### MIRV Splitting
+ICBMs can split when:
+- Current or previous missile at altitude 128-159
+- No missile above altitude 159
+- Available slots exist
+- Splits into up to 3 additional missiles
+
+#### Attack Pacing
+New attacks don't launch while highest ICBM is above:
+`202 - (2 × wave_number)`, minimum 180
+
+#### Wave Limitations
+- Player never loses more than 3 cities per wave
+- If 3+ cities destroyed and no ABMs, wave ends immediately
+- Attack targeting adjusted to prevent excessive city loss
+
+#### Smart Bombs
+- Maximum 2 on screen at once
+- Evade explosions by detecting flashing colors (#4/#5)
+- Move toward target while avoiding explosions
+- Count as 2 missiles in spawn calculations
+
+#### Explosions
+- **Shape**: Octagonal (3/8 slope, not 1/2)
+- **Max Radius**: 13 pixels
+- **Slots**: 20 explosions in 5 groups of 4
+- **Update**: 1 group per frame (reduces load)
+- **Collision**: Checked every 5 frames, only affects ICBMs
+- **No collision below line 33**
+
+### Performance
+- Defers score redraw during heavy frames
+- Group-based explosion updates
+- Fixed-point math for efficiency
+- Optimized rendering pipeline
+
+## Testing
+
+Run the test suite:
+```bash
+pytest tests/
+```
+
+With coverage:
+```bash
+pytest --cov=src tests/
+```
+
+## Development
+
+### Debug Mode
+```bash
+python missile-defense.py --debug
+```
+
+Shows:
+- FPS counter
+- Slot occupancy (ABM, ICBM, Explosions)
+- Frame timing
+- Collision boxes
+- Grid overlay
+
+### Code Quality
+```bash
+# Format code
+black src/ tests/
+
+# Lint
+flake8 src/ tests/
+
+# Type checking
+mypy src/
 ```
 
 ## References
