@@ -13,7 +13,7 @@ three silos. The game reproduces the original arcade's core mechanics:
 - 60Hz game loop with simulated 240Hz IRQ timing
 - Slot-based object tables (8 ABM, 8 ICBM, 1 flier, 20 explosions in 5 groups of 4)
 - Fixed-point 8.8 missile movement (not Bresenham lines)
-- Octagonal explosions with a 3/8 slope, color-cycled at 30Hz
+- Octagonal explosions (corner-chamfered square), color-cycled at 30Hz
 - Smart bombs with evasive movement, MIRV splitting, bomber/satellite fliers
 - Attack pacing, mercy rule, and scoring multiplier matching the wave guide
 - Procedural POKEY-style audio synthesis (no ROM samples)
