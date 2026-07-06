@@ -17,9 +17,11 @@ from src.config import (
     ATTACK_PACE_MIN,
     FIXED_POINT_SCALE,
     FIXED_POINT_SHIFT,
+    FLIER_WAVE_TABLE,
+    ICBM_COUNT_TABLE,
+    ICBM_MOVE_DELAY_TABLE,
     POINTS_PER_REMAINING_ABM,
     POINTS_PER_SURVIVING_CITY,
-    WAVE_SPEEDS,
 )
 
 
@@ -51,10 +53,15 @@ def distance_approx(x1: int, y1: int, x2: int, y2: int) -> int:
 # ── Wave helpers ────────────────────────────────────────────────────────────
 
 
-def get_wave_speed(wave_number: int) -> int:
-    """Return the ICBM speed for a given wave (1-indexed)."""
-    idx = min(wave_number - 1, len(WAVE_SPEEDS) - 1)
-    return WAVE_SPEEDS[max(idx, 0)]
+def get_wave_move_delay(wave_number: int) -> float:
+    """Return the ICBM move-delay (frames waited between steps) for a wave.
+
+    0 means the missile advances every frame (fastest); higher values
+    make it wait longer between each 1-unit step (slower). See
+    ICBM_MOVE_DELAY_TABLE for the source and exact semantics.
+    """
+    idx = min(wave_number - 1, len(ICBM_MOVE_DELAY_TABLE) - 1)
+    return ICBM_MOVE_DELAY_TABLE[max(idx, 0)]
 
 
 def get_attack_pace_altitude(wave_number: int) -> int:
@@ -66,19 +73,47 @@ def get_attack_pace_altitude(wave_number: int) -> int:
     return max(alt, ATTACK_PACE_MIN)
 
 
+def get_icbm_count_for_wave(wave_number: int) -> int:
+    """Return the ICBM budget for a given wave (1-indexed, per the wave guide)."""
+    idx = min(max(wave_number, 1) - 1, len(ICBM_COUNT_TABLE) - 1)
+    return ICBM_COUNT_TABLE[idx]
+
+
+def get_flier_wave_params(wave_number: int) -> tuple[int, int, tuple[int, int]]:
+    """Return (cooldown_frames, fire_rate_frames, altitude_range) for a wave.
+
+    Values are undefined before wave 2 (no fliers); waves beyond the
+    table reuse the highest defined wave's values.
+    """
+    lowest = min(FLIER_WAVE_TABLE)
+    highest = max(FLIER_WAVE_TABLE)
+    key = min(max(wave_number, lowest), highest)
+    return FLIER_WAVE_TABLE[key]
+
+
 # ── Scoring helpers ─────────────────────────────────────────────────────────
+
+
+def get_score_multiplier(wave_number: int) -> int:
+    """Return the scoring multiplier for *wave_number*.
+
+    1x on waves 1-2, 2x on 3-4, 3x on 5-6, 4x on 7-8, 5x on 9-10,
+    6x from wave 11 onward.
+    """
+    return min((max(wave_number, 1) + 1) // 2, 6)
 
 
 def calculate_wave_bonus(
     surviving_cities: int,
     remaining_abms: int,
+    multiplier: int = 1,
 ) -> int:
     """Calculate end-of-wave bonus score.
 
-    Points for surviving cities and remaining ABMs, matching the
-    original arcade scoring.
+    Points for surviving cities and remaining ABMs, scaled by the
+    current scoring multiplier, matching the original arcade scoring.
     """
     return (
         surviving_cities * POINTS_PER_SURVIVING_CITY
         + remaining_abms * POINTS_PER_REMAINING_ABM
-    )
+    ) * multiplier

@@ -12,6 +12,7 @@ from src.config import (
     MAX_CITIES_DESTROYED_PER_WAVE,
     NUM_CITIES_DEFAULT,
     SILO_CAPACITY,
+    SILO_POSITIONS,
 )
 from src.models.city import City, CityManager
 from src.models.defense import DefenseManager, DefenseSilo
@@ -45,9 +46,9 @@ class TestDefenseSiloUnit:
 
     def test_silo_positions_match_config(self):
         mgr = DefenseManager()
-        assert mgr.silos[0].position_x == 32
-        assert mgr.silos[1].position_x == 128
-        assert mgr.silos[2].position_x == 224
+        assert mgr.silos[0].position_x == SILO_POSITIONS[0][0]
+        assert mgr.silos[1].position_x == SILO_POSITIONS[1][0]
+        assert mgr.silos[2].position_x == SILO_POSITIONS[2][0]
 
     def test_destroyed_silos_dont_fire(self):
         silo = DefenseSilo(silo_index=0, position_x=32, position_y=220)
@@ -95,13 +96,24 @@ class TestCityUnit:
         mgr = CityManager()
         assert mgr.active_count == 6
 
-    def test_cities_restored_at_wave_start(self):
+    def test_cities_persist_across_wave_start(self):
+        """Destroyed cities stay destroyed; only silos restore per wave."""
         mgr = CityManager()
         mgr.destroy_city(0)
         mgr.destroy_city(1)
         mgr.start_wave()
-        assert mgr.active_count == 6
+        assert mgr.active_count == 4
         assert mgr.cities_destroyed_this_wave == 0
+
+    def test_try_repair_craters_uses_banked_bonus(self):
+        mgr = CityManager()
+        mgr.destroy_city(0)
+        mgr.destroy_city(1)
+        mgr.bonus_cities = 1
+        repaired = mgr.try_repair_craters()
+        assert repaired == 1
+        assert mgr.active_count == 5
+        assert mgr.bonus_cities == 0
 
     def test_destruction_limited_to_3(self):
         mgr = CityManager()
@@ -126,6 +138,39 @@ class TestCityUnit:
         assert mgr.replace_random_crater() is True
         assert mgr.active_count == 6
         assert mgr.bonus_cities == 0
+
+    def test_destroy_city_rejects_out_of_range_index(self):
+        mgr = CityManager()
+        assert mgr.destroy_city(-1) is False
+        assert mgr.destroy_city(len(mgr.cities)) is False
+
+    def test_destroy_city_rejects_already_destroyed(self):
+        mgr = CityManager()
+        assert mgr.destroy_city(0) is True
+        assert mgr.destroy_city(0) is False
+
+    def test_destroy_city_at_no_match_in_radius(self):
+        mgr = CityManager()
+        assert mgr.destroy_city_at(-1000, -1000) is False
+
+    def test_replace_random_crater_no_bonus_cities(self):
+        mgr = CityManager()
+        mgr.destroy_city(0)
+        assert mgr.bonus_cities == 0
+        assert mgr.replace_random_crater() is False
+
+    def test_replace_random_crater_no_craters(self):
+        mgr = CityManager()
+        mgr.bonus_cities = 1
+        assert mgr.replace_random_crater() is False
+
+    def test_num_cities_caps_at_six(self):
+        mgr = CityManager(num_cities=7)
+        assert len(mgr.cities) == 6
+
+    def test_num_cities_supports_four(self):
+        mgr = CityManager(num_cities=4)
+        assert len(mgr.cities) == 4
 
 
 # ── Bonus City Tests ────────────────────────────────────────────────────────

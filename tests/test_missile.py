@@ -9,11 +9,14 @@ import pytest
 from src.config import (
     ABM_SPEED_CENTER,
     ABM_SPEED_SIDE,
+    FLIER_BOMBER_CROSS_FRAMES,
+    FLIER_SATELLITE_CROSS_FRAMES,
     MAX_ABM_SLOTS,
     MAX_ICBM_SLOTS,
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
     MIRV_MAX_CHILDREN,
+    SCREEN_WIDTH,
 )
 from src.models.missile import (
     ABM,
@@ -253,12 +256,36 @@ class TestFlierMissile:
         f = Flier.create_random(wave_number=1)
         assert f.flier_type in (FlierType.BOMBER, FlierType.SATELLITE)
 
-    def test_horizontal_movement(self):
+    def test_bomber_crosses_full_screen_in_cross_frames(self):
+        """Bomber speed is calibrated so it crosses the *entire* screen
+        width in FLIER_BOMBER_CROSS_FRAMES frames, regardless of the
+        playfield's actual pixel width (see cross_frames docstring)."""
         f = Flier(flier_type=FlierType.BOMBER, altitude=115,
-                  direction=1, speed=2, resurrection_timer=60,
+                  direction=1, speed=1, resurrection_timer=60,
                   firing_timer=30, current_x=0)
-        f.update()
-        assert f.current_x == 2
+        for _ in range(FLIER_BOMBER_CROSS_FRAMES):
+            f.update()
+        assert abs(f.current_x - SCREEN_WIDTH) <= 3
+
+    def test_satellite_crosses_full_screen_in_cross_frames(self):
+        f = Flier(flier_type=FlierType.SATELLITE, altitude=115,
+                  direction=1, speed=1, resurrection_timer=60,
+                  firing_timer=30, current_x=0)
+        for _ in range(FLIER_SATELLITE_CROSS_FRAMES):
+            f.update()
+        assert abs(f.current_x - SCREEN_WIDTH) <= 3
+
+    def test_satellite_faster_than_bomber(self):
+        bomber = Flier(flier_type=FlierType.BOMBER, altitude=115,
+                       direction=1, speed=1, resurrection_timer=60,
+                       firing_timer=30, current_x=0)
+        satellite = Flier(flier_type=FlierType.SATELLITE, altitude=115,
+                          direction=1, speed=1, resurrection_timer=60,
+                          firing_timer=30, current_x=0)
+        for _ in range(30):
+            bomber.update()
+            satellite.update()
+        assert satellite.current_x > bomber.current_x
 
     def test_fires_missiles(self):
         f = Flier(flier_type=FlierType.SATELLITE, altitude=115,

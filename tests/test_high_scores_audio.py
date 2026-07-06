@@ -12,7 +12,7 @@ import tempfile
 
 import pytest
 
-from src.ui.audio import AudioManager, SoundEvent
+from src.ui.audio import AudioManager, SoundEvent, _SOUND_FILES
 from src.ui.high_scores import (
     check_high_score,
     get_top_score,
@@ -206,7 +206,7 @@ class TestAudioManager:
         captured = capsys.readouterr()
         assert f"AudioManager: loading sounds from '{tmp_path}'" in captured.out
         assert "AudioManager: file not found:" in captured.out
-        assert "AudioManager: loaded 0/7 sounds" in captured.out
+        assert f"AudioManager: loaded 0/{len(_SOUND_FILES)} sounds" in captured.out
 
 
 # ── Game Over Integration ──────────────────────────────────────────────────

@@ -21,14 +21,18 @@ from src.config import (
     ABM_SPEED_SIDE,
     FIXED_POINT_SCALE,
     FIXED_POINT_SHIFT,
+    FLIER_BOMBER_CROSS_FRAMES,
+    FLIER_SATELLITE_CROSS_FRAMES,
     MAX_ABM_SLOTS,
     MAX_ICBM_SLOTS,
     MAX_SMART_BOMBS,
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
     MIRV_MAX_CHILDREN,
-    WAVE_SPEEDS,
+    MIRV_START_WAVE,
+    SCREEN_WIDTH,
 )
+from src.utils.functions import get_flier_wave_params
 
 
 # ── Fixed-point 8.8 math utilities ─────────────────────────────────────────
@@ -42,11 +46,6 @@ def to_fixed(value: int) -> int:
 def from_fixed(value: int) -> int:
     """Convert an 8.8 fixed-point value back to an integer (truncates)."""
     return value >> FIXED_POINT_SHIFT
-
-
-def fixed_mul(a: int, b: int) -> int:
-    """Multiply two 8.8 fixed-point values."""
-    return (a * b) >> FIXED_POINT_SHIFT
 
 
 def distance_approx(x1: int, y1: int, x2: int, y2: int) -> int:
@@ -87,22 +86,39 @@ def compute_increments(
 def has_passed_target(
     cx: int, cy: int, tx: int, ty: int, x_inc: int, y_inc: int
 ) -> bool:
-    """Return True when the missile has moved past its target.
+    """Return True when the missile has moved past its target on BOTH axes.
 
-    Check is done per-axis: if the increment is positive and current
-    coordinate ≥ target (or negative and ≤ target) in *either* axis the
-    missile has arrived.  Exact precision is not required (matching the
-    original hardware behaviour).
+    Since x_inc and y_inc are always scaled by the same distance
+    denominator (see compute_increments), a missile moving in a
+    straight line reaches zero remaining distance on both axes at
+    approximately the same time -- so requiring both here (rather than
+    either) still arrives promptly in the overwhelmingly common case.
+    An axis with a zero increment (no movement needed on that axis) is
+    trivially considered "passed" so it never blocks arrival.
+
+    Regression note: this used to be an *any*-axis check, which let a
+    missile register as "arrived" -- exploding and destroying a
+    city/silo -- the moment just ONE axis crossed its target, even
+    while the other axis (typically altitude) was still 20-30+ pixels
+    away. That made hits look like they came "out of nowhere": the
+    explosion and crater appeared at the target while the actual
+    missile was still visibly airborne, nowhere near the ground.
     """
-    if x_inc > 0 and cx >= tx:
-        return True
-    if x_inc < 0 and cx <= tx:
-        return True
-    if y_inc > 0 and cy >= ty:
-        return True
-    if y_inc < 0 and cy <= ty:
-        return True
-    return False
+    if x_inc > 0:
+        x_passed = cx >= tx
+    elif x_inc < 0:
+        x_passed = cx <= tx
+    else:
+        x_passed = True
+
+    if y_inc > 0:
+        y_passed = cy >= ty
+    elif y_inc < 0:
+        y_passed = cy <= ty
+    else:
+        y_passed = True
+
+    return x_passed and y_passed
 
 
 # ── ABM (Anti-Ballistic Missile – player) ──────────────────────────────────
@@ -195,6 +211,11 @@ class ICBM:
     target_x: int
     target_y: int
     speed: int = 1
+    # Frames to wait between each 1-unit move step (0 = moves every frame,
+    # fastest). This -- not step magnitude -- is what the original wave
+    # difficulty ramp actually controls; see ICBM_MOVE_DELAY_TABLE.
+    move_delay: float = 0.0
+    move_wait_counter: float = field(default=0.0, repr=False)
     # Fixed-point position
     current_x_fp: int = 0
     current_y_fp: int = 0
@@ -203,6 +224,17 @@ class ICBM:
     can_mirv: bool = False
     has_mirved: bool = False
     is_active: bool = True
+    # Set when an ABM explosion shoots this missile down mid-flight, as
+    # opposed to reaching its target naturally (see intercept()). Lets
+    # _process_arrivals() tell the two apart -- without this, a missile
+    # shot down high in the sky would still be sitting in the slot
+    # table (is_active=False) when the *next* frame's arrival check
+    # runs, since clear_inactive() doesn't free it until later that
+    # same frame, and would be wrongly treated as having reached its
+    # target: destroying the city/silo it was heading toward, and
+    # showing an explosion there, even though it never got near the
+    # ground. This was the actual cause of "damage out of nowhere".
+    intercepted: bool = False
 
     def __post_init__(self) -> None:
         self.current_x_fp = to_fixed(self.entry_x)
@@ -212,6 +244,7 @@ class ICBM:
             self.target_x, self.target_y,
             self.speed,
         )
+        self.move_wait_counter = 0.0
 
     @property
     def current_x(self) -> int:
@@ -231,9 +264,30 @@ class ICBM:
         return (self.current_x, self.current_y)
 
     def update(self) -> None:
-        """Advance the ICBM one frame."""
+        """Advance the ICBM by one frame, respecting move_delay.
+
+        Uses a fractional accumulator (not a simple decrement) so
+        delays under 1 frame still average out correctly over many
+        frames instead of collapsing to "moves every frame" -- a plain
+        countdown can't distinguish a 0.02-frame delay from a
+        0.625-frame delay since both are consumed by a single -1 step.
+        Each frame contributes 1 unit; a move fires once the
+        accumulator reaches (move_delay + 1), carrying any remainder
+        into the next cycle so the *average* cadence matches move_delay
+        exactly even though individual gaps vary by a frame.
+        """
         if not self.is_active:
             return
+        self.move_wait_counter += 1.0
+        threshold = self.move_delay + 1.0
+        if self.move_wait_counter < threshold:
+            return
+        self.move_wait_counter -= threshold
+        self._step()
+
+    def _step(self) -> None:
+        """Apply exactly one movement step (called once move_delay has
+        elapsed)."""
         self.current_x_fp += self.x_increment
         self.current_y_fp += self.y_increment
         if has_passed_target(
@@ -246,6 +300,12 @@ class ICBM:
     def deactivate(self) -> None:
         self.is_active = False
 
+    def intercept(self) -> None:
+        """Shot down mid-flight by an ABM explosion (as opposed to
+        reaching its own target). See the `intercepted` field."""
+        self.is_active = False
+        self.intercepted = True
+
     # MIRV ────────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -254,10 +314,17 @@ class ICBM:
         active_icbm_count: int,
         remaining_wave_icbms: int,
         any_above_high: bool,
+        wave_number: int = MIRV_START_WAVE,
     ) -> bool:
         """Return True if *icbm* may split (MIRV).
 
         Conditions (see $56d1):
+        0. wave_number >= MIRV_START_WAVE. The shipped ROM's own wave
+           check at $56d1 is a documented bug (compares wave < 1, which
+           is always false, so MIRVs could appear from wave 1 on) --
+           the disassembly's own comment on that line says it "should
+           probably be #$02", i.e. the intended design was no MIRVs on
+           wave 1. We implement the intended fix, not the shipped bug.
         1. Missile altitude is in range [MIRV_ALTITUDE_LOW, MIRV_ALTITUDE_HIGH].
         2. No previously examined missile is above MIRV_ALTITUDE_HIGH
            (i.e. lower Y value means higher on screen).
@@ -265,6 +332,8 @@ class ICBM:
         4. Unspent ICBMs remain for the wave.
         5. Missile has not already MIRVed.
         """
+        if wave_number < MIRV_START_WAVE:
+            return False
         if icbm.has_mirved or not icbm.can_mirv:
             return False
         alt = icbm.altitude
@@ -302,6 +371,7 @@ class ICBM:
                 target_x=targets[i][0],
                 target_y=targets[i][1],
                 speed=self.speed,
+                move_delay=self.move_delay,
                 can_mirv=False,
             )
             children.append(child)
@@ -336,13 +406,24 @@ class SmartBomb(ICBM):
         self.evasion_active = len(self.nearby_explosions) > 0
 
     def update(self) -> None:
-        """Advance one frame, applying evasion if needed."""
+        """Advance one frame, applying evasion if needed.
+
+        Respects move_delay via the same fractional accumulator as
+        ICBM.update -- evading doesn't make a smart bomb move any more
+        often than its wave's pacing allows, only changes which
+        direction it moves.
+        """
         if not self.is_active:
             return
+        self.move_wait_counter += 1.0
+        threshold = self.move_delay + 1.0
+        if self.move_wait_counter < threshold:
+            return
+        self.move_wait_counter -= threshold
         if self.evasion_active and self.nearby_explosions:
             self._evade()
         else:
-            super().update()
+            self._step()
 
     def _evade(self) -> None:
         """Table-driven evasion: move toward target without
@@ -400,9 +481,13 @@ class FlierType(Enum):
 class Flier:
     """Bomber or Satellite that crosses the screen horizontally.
 
-    Travels at mid-screen altitude and can fire multiple missiles at
-    once.  Has resurrection and firing cooldowns that decrease on later
-    waves.
+    Travels at a per-wave altitude band and can fire multiple missiles
+    at once.  Resurrection and firing cooldowns shorten on later waves
+    per the wave guide. Horizontal speed is a fixed-point fraction of
+    SCREEN_WIDTH per frame, calibrated so crossing time stays correct
+    (~12.8s bomber, ~8.5s satellite -- matching independently measured
+    reference footage) regardless of the playfield's actual pixel
+    width -- see FLIER_BOMBER_CROSS_FRAMES / FLIER_SATELLITE_CROSS_FRAMES.
     """
 
     flier_type: FlierType
@@ -414,25 +499,27 @@ class Flier:
     current_x: int = 0
     can_fire: bool = True
     is_active: bool = True
+    _x_fp: int = field(default=0, repr=False, init=False)
+
+    def __post_init__(self) -> None:
+        self._x_fp = to_fixed(self.current_x)
 
     @staticmethod
     def create_random(
         wave_number: int,
-        screen_width: int = 256,
-        altitude: int = 115,
+        screen_width: int = SCREEN_WIDTH,
     ) -> "Flier":
-        """Factory: create a random Bomber or Satellite."""
+        """Factory: create a random Bomber or Satellite for *wave_number*."""
         ft = random.choice([FlierType.BOMBER, FlierType.SATELLITE])
         direction = random.choice([-1, 1])
         start_x = 0 if direction == 1 else screen_width - 1
-        speed = 1
-        res_timer = max(60 - wave_number * 5, 10)
-        fire_timer = max(30 - wave_number * 3, 5)
+        res_timer, fire_timer, (alt_min, alt_max) = get_flier_wave_params(wave_number)
+        altitude = random.randint(alt_min, alt_max)
         return Flier(
             flier_type=ft,
             altitude=altitude,
             direction=direction,
-            speed=speed,
+            speed=1,
             resurrection_timer=res_timer,
             firing_timer=fire_timer,
             current_x=start_x,
@@ -442,16 +529,28 @@ class Flier:
     def current_pos(self) -> tuple[int, int]:
         return (self.current_x, self.altitude)
 
+    @property
+    def cross_frames(self) -> int:
+        """Frames to cross the full screen width (bombers are slower)."""
+        return (
+            FLIER_BOMBER_CROSS_FRAMES
+            if self.flier_type is FlierType.BOMBER
+            else FLIER_SATELLITE_CROSS_FRAMES
+        )
+
     def update(self) -> None:
-        """Move the flier one frame horizontally."""
+        """Advance by SCREEN_WIDTH / cross_frames pixels this frame."""
         if not self.is_active:
             return
-        self.current_x += self.speed * self.direction
+        step_fp = (to_fixed(SCREEN_WIDTH) // self.cross_frames) * self.direction
+        self._x_fp += step_fp
+        self.current_x = from_fixed(self._x_fp)
 
     def fire(
         self,
         targets: list[tuple[int, int]],
         speed: int = 1,
+        move_delay: float = 0.0,
     ) -> list[ICBM]:
         """Fire missiles downward toward *targets*."""
         missiles: list[ICBM] = []
@@ -465,6 +564,7 @@ class Flier:
                     target_x=t[0],
                     target_y=t[1],
                     speed=speed,
+                    move_delay=move_delay,
                 )
             )
         return missiles

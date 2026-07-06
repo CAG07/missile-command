@@ -8,7 +8,12 @@ See Missile Command Disassembly.pdf for technical reference.
 # ---------------------------------------------------------------------------
 # Display
 # ---------------------------------------------------------------------------
-SCREEN_WIDTH: int = 256
+# The original arcade's native resolution was 256x231 (~1.11:1). Widened
+# to a 16:9-ish playfield (410x231) so fullscreen fills modern widescreen
+# monitors without pillarboxing, per user request -- silo/city X positions
+# below are scaled proportionally from the original layout to fill the
+# extra width rather than being stretched.
+SCREEN_WIDTH: int = 410
 SCREEN_HEIGHT: int = 231
 UPDATE_RATE: int = 60  # Hz – all timing assumes 60 fps
 
@@ -33,12 +38,15 @@ ABM_SPEED_CENTER: int = 7  # units per frame for center silo
 # ---------------------------------------------------------------------------
 NUM_SILOS: int = 3
 SILO_CAPACITY: int = 10  # ABMs per silo at wave start
+SILO_LOW_THRESHOLD: int = 3  # "LOW" HUD indicator / warning at this many left
 
-# Silo X positions (original arcade screen coordinates)
+# Silo X positions, scaled proportionally from the original arcade's
+# 256-wide layout (32, 128, 224) to fill the widened 410px playfield.
+# Center silo stays exactly at SCREEN_WIDTH // 2.
 SILO_POSITIONS: list[tuple[int, int]] = [
-    (32, 220),    # left silo   (index 0)
-    (128, 220),   # center silo (index 1)
-    (224, 220),   # right silo  (index 2)
+    (51, 220),    # left silo   (index 0)
+    (205, 220),   # center silo (index 1)
+    (359, 220),   # right silo  (index 2)
 ]
 SILO_Y: int = 220  # ground-level Y for all silos
 
@@ -48,14 +56,15 @@ SILO_Y: int = 220  # ground-level Y for all silos
 NUM_CITIES_DEFAULT: int = 6  # marathon-mode default (DIP switch selectable 4-7)
 MAX_CITIES_DESTROYED_PER_WAVE: int = 3
 
-# Arcade city positions (X only; Y sits on the ground line)
+# City X positions, scaled proportionally from the original arcade's
+# 256-wide layout to fill the widened 410px playfield (Y sits on ground).
 CITY_POSITIONS: list[tuple[int, int]] = [
-    (48, 216),
-    (72, 216),
-    (96, 216),
-    (160, 216),
-    (184, 216),
-    (208, 216),
+    (77, 216),
+    (115, 216),
+    (154, 216),
+    (256, 216),
+    (295, 216),
+    (333, 216),
 ]
 CITY_Y: int = 216
 
@@ -68,8 +77,11 @@ BONUS_CITY_POINTS: int = 10_000  # default; DIP-switch selectable 8000-20000
 # Explosion
 # ---------------------------------------------------------------------------
 EXPLOSION_MAX_RADIUS: int = 13
-EXPLOSION_OCTAGON_SLOPE_NUM: int = 3  # numerator of 3/8 slope
-EXPLOSION_OCTAGON_SLOPE_DEN: int = 8  # denominator
+#: Chamfer size as a fraction of radius (see octagon_points). 3/5 gives
+#: near-equal flat-edge and diagonal-edge lengths -- a regular-looking
+#: octagon, matching the reference footage (missile-command-arcade.gif).
+EXPLOSION_OCTAGON_SLOPE_NUM: int = 3
+EXPLOSION_OCTAGON_SLOPE_DEN: int = 5
 EXPLOSION_COLLISION_ALTITUDE_MIN: int = 33  # no collision below line 33
 
 # ---------------------------------------------------------------------------
@@ -79,10 +91,12 @@ MIRV_ALTITUDE_LOW: int = 128
 MIRV_ALTITUDE_HIGH: int = 159
 MIRV_MAX_CHILDREN: int = 3
 
-# ---------------------------------------------------------------------------
-# Flier
-# ---------------------------------------------------------------------------
-FLIER_ALTITUDE: int = 115  # approximately mid-screen
+# First wave MIRVs are allowed to appear. The shipped ROM's own check at
+# $56d1 compares wave < 1 (always false), a documented off-by-one bug --
+# the disassembly's own comment on that line says it "should probably be
+# #$02". We implement the intended design (no MIRVs on wave 1), not the
+# shipped bug.
+MIRV_START_WAVE: int = 2
 
 # ---------------------------------------------------------------------------
 # Scoring (per original arcade)
@@ -98,9 +112,36 @@ POINTS_PER_SURVIVING_CITY: int = 100
 # Speeds increase each wave up to a cap.  Values are in 8.8 fixed-point
 # fractional units.  See disassembly for exact per-wave table.
 # ---------------------------------------------------------------------------
-WAVE_SPEEDS: list[int] = [
-    1, 1, 2, 2, 3, 3, 4, 4, 5, 5,
-    6, 6, 7, 7, 8, 8, 8, 8, 8, 8,
+# ICBM "speed" is NOT a velocity -- per the wave guide, it's the number of
+# frames the game waits between moving an ICBM at all (0 = moves every
+# frame, fastest; higher = longer pause between each 1-unit step). Stored
+# internally as an 8.8 fixed-point value added to a per-missile counter.
+# When a move *does* happen, it always advances by exactly 1 unit -- the
+# whole difficulty ramp comes from how often that happens, not step size.
+#
+# NOTE: the wave-guide's own literal per-wave values (4.8125, 2.875, 1.75,
+# ...) were verified byte-for-byte against the source, but produce a ramp
+# that halves roughly every wave (wave 1 -> wave 3 in this game's terms is
+# a single ICBM's full-screen fall time going from ~21s to ~10s) -- too
+# steep per direct user playtesting feedback, despite matching the
+# documented table. Replaced with a deliberately gentler, hand-tuned curve
+# per that feedback: wave 1 slower (~40s full-screen fall), and the ramp
+# toward "fast" spread across all 15 waves instead of front-loaded into
+# the first 8. This is an intentional deviation from the literal
+# disassembly values, not a research error -- SPEC.md's "disassembly wins"
+# default is overridden here by explicit, repeated user direction after
+# hands-on testing.
+ICBM_MOVE_DELAY_TABLE: list[float] = [
+    9.9, 7.7, 5.8, 4.5, 3.4, 2.5, 1.9, 1.3,
+    0.9, 0.6, 0.4, 0.25, 0.15, 0.06, 0.0,
+]
+ICBM_BASE_STEP_SPEED: int = 1  # units advanced per actual move (constant)
+
+# ICBMs launched per wave (1-indexed by position; wave 20+ reuses the
+# last entry). Source: https://6502disassembly.com/va-missile-command/wave-guide.html
+ICBM_COUNT_TABLE: list[int] = [
+    12, 15, 18, 12, 16, 14, 17, 10, 13, 16,
+    19, 12, 14, 16, 18, 14, 17, 19, 22,
 ]
 
 # Attack pacing altitude = 202 - 2 * wave_number, minimum 180
@@ -112,6 +153,43 @@ ATTACK_PACE_MIN: int = 180
 # Smart bomb
 # ---------------------------------------------------------------------------
 MAX_SMART_BOMBS: int = 2  # max on screen at once
+SMART_BOMB_START_WAVE: int = 6       # first wave smart bombs may appear (wave-guide)
+SMART_BOMB_CHANCE: float = 0.2       # chance a paced attack spawn is a smart bomb
+SMART_BOMB_EVASION_RADIUS: int = 40  # native-pixel radius that triggers evasion
+
+# ---------------------------------------------------------------------------
+# Attack pacing / wave spawning
+# ---------------------------------------------------------------------------
+ATTACK_BATCH_SIZE: int = 4  # max ICBMs launched in a single pacing check
+
+# ---------------------------------------------------------------------------
+# Flier (bomber / satellite) spawning
+#
+# Per-wave (cooldown_frames, fire_rate_frames, (altitude_min, altitude_max)).
+# Fliers first appear in wave 2 ("appear as often as possible"); values
+# beyond wave 8 continue unchanged. Source:
+# https://6502disassembly.com/va-missile-command/wave-guide.html
+# ---------------------------------------------------------------------------
+FLIER_START_WAVE: int = 2
+FLIER_INITIAL_DELAY_FRAMES: int = 300  # ~5s at 60Hz before the first flier
+FLIER_WAVE_TABLE: dict[int, tuple[int, int, tuple[int, int]]] = {
+    2: (240, 128, (148, 195)),
+    3: (160, 96, (148, 195)),
+    4: (128, 64, (132, 163)),
+    5: (128, 48, (132, 163)),
+    6: (96, 32, (100, 131)),
+    7: (64, 32, (100, 131)),
+    8: (32, 16, (100, 131)),
+}
+#: Frames to cross the *original* 256px-wide screen: bombers at 1px/3
+#: frames (768 frames = 12.8s), satellites at 1px/2 frames (512 frames =
+#: 8.5s) -- both match independently-measured reference footage ("a
+#: little over 12/8 seconds"). Flier.update() scales its per-frame step
+#: by SCREEN_WIDTH / these constants so crossing TIME stays correct
+#: regardless of the playfield's actual pixel width (this repo's
+#: widened 410px playfield would otherwise take 1.6x longer to cross).
+FLIER_BOMBER_CROSS_FRAMES: int = 768
+FLIER_SATELLITE_CROSS_FRAMES: int = 512
 
 # ---------------------------------------------------------------------------
 # Colors (arcade palette indices)
@@ -124,3 +202,25 @@ COLOR_EXPLOSION_FLASH_B: int = 5
 # ---------------------------------------------------------------------------
 FIXED_POINT_SHIFT: int = 8  # 8.8 format
 FIXED_POINT_SCALE: int = 1 << FIXED_POINT_SHIFT  # 256
+
+# ---------------------------------------------------------------------------
+# Rendering / window
+# ---------------------------------------------------------------------------
+DEFAULT_SCALE: int = 3  # integer upscale factor for the 256x231 native surface
+GROUND_Y: int = 220     # native-pixel Y of the ground line
+CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
+
+# Ground scarring: any explosion (ABM or ICBM) that visually touches the
+# ground line permanently bites a small crater out of the terrain there,
+# whether or not it destroyed a city/silo -- matches the original arcade's
+# persistent battlefield-scarring look.
+GROUND_CRATER_RADIUS: int = 5
+MAX_GROUND_CRATERS: int = 60  # oldest craters evicted FIFO beyond this
+#: ~4.4s tally screen before the next wave. Sized to cover the worst
+#: case: 30 unused ABMs @ 4 frames/tick (120 frames) + the ABM->city
+#: pause (24 frames) + 6 surviving cities @ 10 frames/tick, slower than
+#: ABMs since there are so few of them (60 frames) + a cushion to
+#: actually see the completed screen (60 frames).
+WAVE_END_DISPLAY_FRAMES: int = 264
+GAME_OVER_DISPLAY_FRAMES: int = 120  # ~2s for the "THE END" animation to play
+WAVE_INTRO_DISPLAY_FRAMES: int = 90  # ~1.5s "WAVE N" intro before attacks begin

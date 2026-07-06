@@ -13,11 +13,13 @@ from src.config import (
     ABM_SPEED_SIDE,
     BONUS_CITY_POINTS,
     EXPLOSION_MAX_RADIUS,
+    FLIER_BOMBER_CROSS_FRAMES,
     MAX_ABM_SLOTS,
     MAX_CITIES_DESTROYED_PER_WAVE,
     MAX_ICBM_SLOTS,
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
+    SCREEN_WIDTH,
     SILO_CAPACITY,
 )
 from src.models.missile import (
@@ -47,7 +49,10 @@ from src.ui.text import ScoreDisplay
 from src.utils.functions import (
     calculate_wave_bonus,
     get_attack_pace_altitude,
-    get_wave_speed,
+    get_flier_wave_params,
+    get_icbm_count_for_wave,
+    get_score_multiplier,
+    get_wave_move_delay,
 )
 
 
@@ -119,17 +124,37 @@ class TestIncrements:
 
 
 class TestPassedTarget:
+    """has_passed_target requires BOTH axes to have crossed their target
+    (not either) -- see the function's docstring for the regression this
+    guards against: a missile that's crossed only one axis (e.g. X)
+    while the other (e.g. Y/altitude) is still far away is genuinely
+    still in flight, not arrived, even though the old any-axis check
+    would have exploded/destroyed something at that point."""
+
     def test_not_passed_yet(self):
         assert not has_passed_target(0, 0, 100, 100, 1, 1)
 
-    def test_passed_x(self):
-        assert has_passed_target(101, 50, 100, 100, 1, 1)
+    def test_x_passed_alone_is_not_arrived(self):
+        assert not has_passed_target(101, 50, 100, 100, 1, 1)
 
-    def test_passed_y(self):
-        assert has_passed_target(50, 101, 100, 100, 1, 1)
+    def test_y_passed_alone_is_not_arrived(self):
+        assert not has_passed_target(50, 101, 100, 100, 1, 1)
+
+    def test_both_passed_is_arrived(self):
+        assert has_passed_target(101, 101, 100, 100, 1, 1)
 
     def test_negative_direction(self):
-        assert has_passed_target(99, 50, 100, 100, -1, -1)
+        # Approaching from the upper-right: x decreasing toward 100,
+        # y increasing toward 100.
+        assert not has_passed_target(150, 50, 100, 100, -1, 1)  # neither yet
+        assert not has_passed_target(99, 50, 100, 100, -1, 1)   # x only
+        assert has_passed_target(99, 101, 100, 100, -1, 1)      # both
+
+    def test_zero_increment_axis_is_trivially_passed(self):
+        # dx == 0 (straight vertical flight): X never blocks arrival.
+        assert has_passed_target(100, 101, 100, 100, 0, 1)
+        # dy == 0 (straight horizontal flight): Y never blocks arrival.
+        assert has_passed_target(101, 100, 100, 100, 1, 0)
 
 
 # ── ABM ─────────────────────────────────────────────────────────────────────
@@ -166,6 +191,14 @@ class TestABM:
                 break
         assert not abm.is_active
 
+    def test_update_is_noop_when_inactive(self):
+        abm = ABM(silo_index=1, start_x=128, start_y=220,
+                   target_x=128, target_y=50)
+        abm.deactivate()
+        old_pos = abm.current_pos
+        abm.update()
+        assert abm.current_pos == old_pos
+
 
 # ── ICBM ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +225,67 @@ class TestICBM:
                 break
         assert not icbm.is_active
 
+    def test_update_is_noop_when_inactive(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200, speed=2)
+        icbm.deactivate()
+        old_pos = icbm.current_pos
+        icbm.update()
+        assert icbm.current_pos == old_pos
+
+    def test_zero_move_delay_moves_every_frame(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=0.0)
+        old_y = icbm.current_y
+        icbm.update()
+        assert icbm.current_y > old_y
+        old_y = icbm.current_y
+        icbm.update()
+        assert icbm.current_y > old_y
+
+    def test_positive_move_delay_holds_position_between_steps(self):
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=4.0)
+        positions = []
+        for _ in range(3):
+            icbm.update()
+            positions.append(icbm.current_y)
+        # With a 4-frame delay (5-frame cycle), the missile shouldn't
+        # have moved yet after just 3 frames.
+        assert positions == [0, 0, 0]
+
+    def test_move_delay_average_cadence_matches_over_many_frames(self):
+        """A fractional delay should average out correctly over many
+        frames rather than collapsing to "every frame" (regression
+        test for a real bug found during the wave-1-difficulty fix:
+        a naive decrement-by-1 counter made any delay < 1 behave
+        identically, losing the distinction between e.g. waves 5, 8,
+        and 11). Counts actual step invocations directly rather than
+        inferring from position, since the per-step distance depends
+        on the fixed-point increment, not just "1 pixel"."""
+        delay = 0.625  # expect a step roughly every 1.625 frames
+        icbm = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=200,
+                     speed=1, move_delay=delay)
+        n_frames = 1000
+        step_count = 0
+        for _ in range(n_frames):
+            before = icbm.current_pos
+            icbm.update()
+            icbm.is_active = True  # ignore arrival; testing cadence only
+            if icbm.current_pos != before:
+                step_count += 1
+        expected_moves = n_frames / (delay + 1.0)
+        assert abs(step_count - expected_moves) / expected_moves < 0.05
+
+    def test_higher_move_delay_is_slower_than_lower_over_time(self):
+        fast = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=1000,
+                     speed=1, move_delay=0.02)
+        slow = ICBM(entry_x=100, entry_y=0, target_x=100, target_y=1000,
+                     speed=1, move_delay=0.625)
+        for _ in range(200):
+            fast.update()
+            slow.update()
+        assert fast.current_y > slow.current_y
+
 
 # ── MIRV logic ──────────────────────────────────────────────────────────────
 
@@ -210,6 +304,26 @@ class TestMIRV:
         assert ICBM.check_mirv_conditions(
             icbm, active_icbm_count=2,
             remaining_wave_icbms=5, any_above_high=False,
+        )
+
+    def test_mirv_blocked_on_wave_1(self):
+        """The shipped ROM's wave check at $56d1 is a documented bug
+        (compares wave < 1, always false); the disassembly's own
+        comment says it should be #$02. MIRVs must not appear on
+        wave 1, matching the intended design, not the shipped bug."""
+        icbm = self._make_icbm_at_altitude(140)  # otherwise fully eligible
+        assert not ICBM.check_mirv_conditions(
+            icbm, active_icbm_count=2,
+            remaining_wave_icbms=5, any_above_high=False,
+            wave_number=1,
+        )
+
+    def test_mirv_allowed_from_wave_2(self):
+        icbm = self._make_icbm_at_altitude(140)
+        assert ICBM.check_mirv_conditions(
+            icbm, active_icbm_count=2,
+            remaining_wave_icbms=5, any_above_high=False,
+            wave_number=2,
         )
 
     def test_mirv_below_range(self):
@@ -297,6 +411,26 @@ class TestSmartBomb:
         sb.update()
         assert sb.current_y > old_y
 
+    def test_update_is_noop_when_inactive(self):
+        sb = SmartBomb(
+            entry_x=100, entry_y=0, target_x=100, target_y=200, speed=2,
+        )
+        sb.deactivate()
+        old_pos = sb.current_pos
+        sb.update()
+        assert sb.current_pos == old_pos
+
+    def test_evade_picks_closest_of_multiple_explosions(self):
+        sb = SmartBomb(
+            entry_x=100, entry_y=100, target_x=100, target_y=220, speed=1,
+        )
+        # A far explosion and a near one -- evasion must react to the
+        # nearer one, not just the first in the list.
+        sb.detect_explosions([(100, 5), (105, 100)])
+        old_pos = sb.current_pos
+        sb.update()
+        assert sb.current_pos != old_pos
+
 
 # ── Slot Manager ────────────────────────────────────────────────────────────
 
@@ -368,12 +502,22 @@ class TestExplosion:
         pts = octagon_points(100, 100, 13)
         assert len(pts) == 8
 
-    def test_octagon_shape_squarish(self):
+    def test_octagon_has_flat_edges_not_a_diamond(self):
+        """Each cardinal side is a flat edge (2 distinct vertices at the
+        same extreme coordinate), not a single point -- a single point
+        per cardinal side degenerates into a diamond (see octagon_points
+        docstring)."""
         pts = octagon_points(100, 100, 13)
-        # Top vertex should be directly above center
-        assert pts[0] == (100, 87)
-        # Right vertex should be directly right
-        assert pts[2] == (113, 100)
+        top_left, top_right = pts[0], pts[1]
+        assert top_left[1] == top_right[1] == 87  # both on the top edge
+        assert top_left[0] != top_right[0]  # distinct points, not one
+
+    def test_octagon_bounding_box(self):
+        pts = octagon_points(100, 100, 13)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        assert min(xs) == 87 and max(xs) == 113
+        assert min(ys) == 87 and max(ys) == 113
 
     def test_point_in_octagon_center(self):
         assert point_in_octagon(100, 100, 100, 100, 13)
@@ -467,12 +611,14 @@ class TestCityManager:
                 destroyed += 1
         assert destroyed == MAX_CITIES_DESTROYED_PER_WAVE
 
-    def test_start_wave_restores(self):
+    def test_start_wave_persists_destroyed_cities(self):
+        """Destroyed cities stay destroyed across waves; only the
+        per-wave destruction counter resets."""
         mgr = CityManager()
         mgr.destroy_city(0)
         mgr.destroy_city(1)
         mgr.start_wave()
-        assert mgr.active_count == 6
+        assert mgr.active_count == 4
         assert mgr.cities_destroyed_this_wave == 0
 
     def test_bonus_city_award(self):
@@ -539,11 +685,32 @@ class TestDefenseManager:
         mgr = DefenseManager()
         assert mgr.fire(1, 100, 50, MAX_ABM_SLOTS) is None
 
+    def test_fire_rejects_invalid_silo_index(self):
+        mgr = DefenseManager()
+        assert mgr.fire(-1, 100, 50, 0) is None
+        assert mgr.fire(len(mgr.silos), 100, 50, 0) is None
+
     def test_fire_nearest(self):
         mgr = DefenseManager()
         abm = mgr.fire_nearest(40, 50, 0)
         assert abm is not None
         assert abm.silo_index == 0  # left silo is nearest to x=40
+
+    def test_fire_nearest_respects_abm_limit(self):
+        mgr = DefenseManager()
+        assert mgr.fire_nearest(40, 50, MAX_ABM_SLOTS) is None
+
+    def test_fire_nearest_returns_none_when_all_silos_empty(self):
+        mgr = DefenseManager()
+        for silo in mgr.silos:
+            silo.abm_count = 0
+        assert mgr.fire_nearest(40, 50, 0) is None
+
+    def test_get_silo_valid_and_invalid(self):
+        mgr = DefenseManager()
+        assert mgr.get_silo(0) is mgr.silos[0]
+        assert mgr.get_silo(-1) is None
+        assert mgr.get_silo(len(mgr.silos)) is None
 
     def test_total_abm_count(self):
         mgr = DefenseManager()
@@ -556,6 +723,22 @@ class TestDefenseManager:
         mgr.restore_all()
         assert mgr.total_abm_count == SILO_CAPACITY * 3
         assert not mgr.silos[1].is_destroyed
+
+    def test_destroy_silo_at(self):
+        mgr = DefenseManager()
+        x, y = mgr.silos[0].position
+        assert mgr.destroy_silo_at(x, y) is True
+        assert mgr.silos[0].is_destroyed
+
+    def test_destroy_silo_at_no_match(self):
+        mgr = DefenseManager()
+        assert mgr.destroy_silo_at(-100, -100) is False
+
+    def test_destroy_silo_at_skips_already_destroyed(self):
+        mgr = DefenseManager()
+        x, y = mgr.silos[0].position
+        mgr.silos[0].destroy()
+        assert mgr.destroy_silo_at(x, y) is False
 
 
 # ── Score Display ───────────────────────────────────────────────────────────
@@ -584,12 +767,16 @@ class TestScoreDisplay:
 
 
 class TestWaveHelpers:
-    def test_get_wave_speed_wave1(self):
-        assert get_wave_speed(1) == 1
+    def test_get_wave_move_delay_wave1_is_slow(self):
+        # Wave 1 waits ~4.8 frames between moves -- deliberately slow.
+        assert get_wave_move_delay(1) > 4.0
 
-    def test_get_wave_speed_clamps(self):
-        # Beyond table length should return last entry
-        assert get_wave_speed(100) == 8
+    def test_get_wave_move_delay_decreases_each_wave(self):
+        assert get_wave_move_delay(1) > get_wave_move_delay(2) > get_wave_move_delay(3)
+
+    def test_get_wave_move_delay_clamps_at_zero(self):
+        # Beyond table length should return the fastest (0 = every frame).
+        assert get_wave_move_delay(100) == 0.0
 
     def test_attack_pace_altitude(self):
         assert get_attack_pace_altitude(1) == 200
@@ -599,6 +786,43 @@ class TestWaveHelpers:
     def test_calculate_wave_bonus(self):
         bonus = calculate_wave_bonus(surviving_cities=4, remaining_abms=10)
         assert bonus == 4 * 100 + 10 * 5  # 450
+
+    def test_calculate_wave_bonus_with_multiplier(self):
+        bonus = calculate_wave_bonus(surviving_cities=4, remaining_abms=10, multiplier=3)
+        assert bonus == (4 * 100 + 10 * 5) * 3
+
+    def test_icbm_count_matches_wave_guide(self):
+        assert get_icbm_count_for_wave(1) == 12
+        assert get_icbm_count_for_wave(2) == 15
+        assert get_icbm_count_for_wave(8) == 10
+        assert get_icbm_count_for_wave(19) == 22
+
+    def test_icbm_count_beyond_table_reuses_last_entry(self):
+        assert get_icbm_count_for_wave(50) == get_icbm_count_for_wave(19)
+
+    def test_flier_params_before_wave_2_clamped_to_wave_2(self):
+        assert get_flier_wave_params(1) == get_flier_wave_params(2)
+
+    def test_flier_params_match_wave_guide(self):
+        assert get_flier_wave_params(2) == (240, 128, (148, 195))
+        assert get_flier_wave_params(6) == (96, 32, (100, 131))
+
+    def test_flier_params_beyond_table_reuse_wave_8(self):
+        assert get_flier_wave_params(50) == get_flier_wave_params(8)
+
+    def test_score_multiplier_schedule(self):
+        assert get_score_multiplier(1) == 1
+        assert get_score_multiplier(2) == 1
+        assert get_score_multiplier(3) == 2
+        assert get_score_multiplier(4) == 2
+        assert get_score_multiplier(5) == 3
+        assert get_score_multiplier(6) == 3
+        assert get_score_multiplier(7) == 4
+        assert get_score_multiplier(8) == 4
+        assert get_score_multiplier(9) == 5
+        assert get_score_multiplier(10) == 5
+        assert get_score_multiplier(11) == 6
+        assert get_score_multiplier(50) == 6
 
 
 # ── Game integration ────────────────────────────────────────────────────────
@@ -659,12 +883,13 @@ class TestFlier:
         assert f.is_active
         assert f.flier_type in (FlierType.BOMBER, FlierType.SATELLITE)
 
-    def test_horizontal_movement(self):
+    def test_bomber_crosses_full_screen_in_cross_frames(self):
         f = Flier(flier_type=FlierType.BOMBER, altitude=115,
-                  direction=1, speed=2, resurrection_timer=60,
+                  direction=1, speed=1, resurrection_timer=60,
                   firing_timer=30, current_x=0)
-        f.update()
-        assert f.current_x == 2
+        for _ in range(FLIER_BOMBER_CROSS_FRAMES):
+            f.update()
+        assert abs(f.current_x - SCREEN_WIDTH) <= 3
 
     def test_fire(self):
         f = Flier(flier_type=FlierType.SATELLITE, altitude=115,
