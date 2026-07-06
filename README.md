@@ -109,7 +109,7 @@ screen counts up the bonus tick by tick before the next wave begins.
   if that cap is hit and no ABMs remain, the wave ends immediately
 
 ### Explosions
-- Octagons (3/8 slope), not circles — max radius 13
+- Octagons (not circles) — max radius 13
 - Expand, hold, then contract; 20 slots in 5 groups of 4, one group updated
   per frame to spread the per-frame cost
 - Collision against ICBMs/smart bombs is checked only when a group updates
