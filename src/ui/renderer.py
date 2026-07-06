@@ -1,10 +1,9 @@
 """
 Renderer for Missile Command.
 
-Draws every frame onto a native 256x231 surface (matching the original
-arcade's resolution), which is then integer-upscaled onto the actual
-application window, centered with pillarboxing/letterboxing when the
-window's aspect ratio doesn't match.
+Draws every frame onto a native SCREEN_WIDTH×SCREEN_HEIGHT surface (see src.config),
+which is then integer-upscaled onto the actual application window, centered
+with pillarboxing/letterboxing when the window's aspect ratio doesn't match.
 
 References:
     - Missile Command Disassembly.pdf
