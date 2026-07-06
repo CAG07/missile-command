@@ -43,7 +43,8 @@ The original arcade uses 4 independent sound channels (POKEY chip).
 ### Not in the original channel table
 | File | Description |
 |------|-------------|
-| `tally_tick.wav` | One tick per surviving city / unfired ABM counted up on the tally screen |
+| `roll_up_2.wav` | One tick per surviving city counted up on the tally screen (played first) |
+| `roll_up_1.wav` | One tick per unfired ABM counted up on the tally screen (played after cities) |
 
 ## Audio Format
 

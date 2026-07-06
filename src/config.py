@@ -77,8 +77,11 @@ BONUS_CITY_POINTS: int = 10_000  # default; DIP-switch selectable 8000-20000
 # Explosion
 # ---------------------------------------------------------------------------
 EXPLOSION_MAX_RADIUS: int = 13
-EXPLOSION_OCTAGON_SLOPE_NUM: int = 3  # numerator of 3/8 slope
-EXPLOSION_OCTAGON_SLOPE_DEN: int = 8  # denominator
+#: Chamfer size as a fraction of radius (see octagon_points). 3/5 gives
+#: near-equal flat-edge and diagonal-edge lengths -- a regular-looking
+#: octagon, matching the reference footage (missile-command-arcade.gif).
+EXPLOSION_OCTAGON_SLOPE_NUM: int = 3
+EXPLOSION_OCTAGON_SLOPE_DEN: int = 5
 EXPLOSION_COLLISION_ALTITUDE_MIN: int = 33  # no collision below line 33
 
 # ---------------------------------------------------------------------------
@@ -164,8 +167,8 @@ ATTACK_BATCH_SIZE: int = 4  # max ICBMs launched in a single pacing check
 #
 # Per-wave (cooldown_frames, fire_rate_frames, (altitude_min, altitude_max)).
 # Fliers first appear in wave 2 ("appear as often as possible"); values
-# beyond wave 8 continue unchanged. Bombers move 1px/3 frames, satellites
-# 1px/2 frames. Source: https://6502disassembly.com/va-missile-command/wave-guide.html
+# beyond wave 8 continue unchanged. Source:
+# https://6502disassembly.com/va-missile-command/wave-guide.html
 # ---------------------------------------------------------------------------
 FLIER_START_WAVE: int = 2
 FLIER_INITIAL_DELAY_FRAMES: int = 300  # ~5s at 60Hz before the first flier
@@ -178,8 +181,15 @@ FLIER_WAVE_TABLE: dict[int, tuple[int, int, tuple[int, int]]] = {
     7: (64, 32, (100, 131)),
     8: (32, 16, (100, 131)),
 }
-FLIER_BOMBER_MOVE_INTERVAL: int = 3   # 1 pixel every N frames
-FLIER_SATELLITE_MOVE_INTERVAL: int = 2  # 1 pixel every N frames
+#: Frames to cross the *original* 256px-wide screen: bombers at 1px/3
+#: frames (768 frames = 12.8s), satellites at 1px/2 frames (512 frames =
+#: 8.5s) -- both match independently-measured reference footage ("a
+#: little over 12/8 seconds"). Flier.update() scales its per-frame step
+#: by SCREEN_WIDTH / these constants so crossing TIME stays correct
+#: regardless of the playfield's actual pixel width (this repo's
+#: widened 410px playfield would otherwise take 1.6x longer to cross).
+FLIER_BOMBER_CROSS_FRAMES: int = 768
+FLIER_SATELLITE_CROSS_FRAMES: int = 512
 
 # ---------------------------------------------------------------------------
 # Colors (arcade palette indices)
@@ -206,6 +216,11 @@ CROSSHAIR_SENSITIVITY: float = 1.0  # trackball-emulation mouse sensitivity
 # persistent battlefield-scarring look.
 GROUND_CRATER_RADIUS: int = 5
 MAX_GROUND_CRATERS: int = 60  # oldest craters evicted FIFO beyond this
-WAVE_END_DISPLAY_FRAMES: int = 180  # ~3s tally screen before the next wave
+#: ~4.4s tally screen before the next wave. Sized to cover the worst
+#: case: 30 unused ABMs @ 4 frames/tick (120 frames) + the ABM->city
+#: pause (24 frames) + 6 surviving cities @ 10 frames/tick, slower than
+#: ABMs since there are so few of them (60 frames) + a cushion to
+#: actually see the completed screen (60 frames).
+WAVE_END_DISPLAY_FRAMES: int = 264
 GAME_OVER_DISPLAY_FRAMES: int = 120  # ~2s for the "THE END" animation to play
 WAVE_INTRO_DISPLAY_FRAMES: int = 90  # ~1.5s "WAVE N" intro before attacks begin

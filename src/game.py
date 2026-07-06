@@ -97,6 +97,7 @@ class Game:
     last_wave_bonus: int = 0
     last_wave_surviving_cities: int = 0
     last_wave_remaining_abms: int = 0
+    last_wave_bonus_cities_awarded: int = 0
 
     # Persistent terrain scarring: X positions of ground craters bitten
     # by explosions that touched the ground line. Not reset per wave --
@@ -137,7 +138,9 @@ class Game:
         )
         self.score_display.add(bonus)
         self.last_wave_bonus = bonus
-        self.cities.check_bonus(self.score_display.player_score)
+        self.last_wave_bonus_cities_awarded = self.cities.check_bonus(
+            self.score_display.player_score
+        )
         self.cities.try_repair_craters()
         self.wave_number += 1
         self.state = GameState.WAVE_END

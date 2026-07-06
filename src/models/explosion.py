@@ -1,9 +1,9 @@
 """
 Explosion model for Missile Command.
 
-Implements octagonal (not circular) explosions with the original arcade's
-3/8 slope, group-based update scheduling (5 groups of 4), and ICBM-only
-collision detection performed every 5 frames.
+Implements octagonal (not circular) explosions matching the original
+arcade, with group-based update scheduling (5 groups of 4) and
+ICBM-only collision detection performed every 5 frames.
 
 References:
     - Missile Command Disassembly.pdf
@@ -47,23 +47,31 @@ def octagon_points(
 ) -> list[tuple[int, int]]:
     """Return the 8 vertices of an octagon centred at (*cx*, *cy*).
 
-    The octagon uses a 3/8 slope (more square-looking than a 1/2 slope)
-    matching the original Atari hardware.
+    *radius* is the half-width of the bounding square (distance from
+    centre to each flat edge); the four corners of that square are
+    chamfered off by *slope_num/slope_den* of *radius* to form the
+    diagonal edges. Each cardinal side is a flat edge (2 vertices),
+    not a single point -- putting a single vertex at each cardinal
+    extreme and interpolating the "corner" from it is a common mistake
+    that actually draws a diamond: that interpolated point always
+    lands exactly on the straight line between the two adjacent
+    cardinal vertices, since (radius - cut, cut) is collinear with
+    (0, radius) and (radius, 0) for any cut.
 
-    Vertex order: top, top-right, right, bottom-right, bottom,
-    bottom-left, left, top-left.
+    Vertex order: top-left, top-right, right-top, right-bottom,
+    bottom-right, bottom-left, left-bottom, left-top.
     """
-    # Cutoff length along each axis where the chamfer begins
     cut = (radius * slope_num) // slope_den
+    h = radius - cut  # half-length of each flat edge
     return [
-        (cx, cy - radius),              # top
-        (cx + radius - cut, cy - cut),  # top-right
-        (cx + radius, cy),              # right
-        (cx + radius - cut, cy + cut),  # bottom-right
-        (cx, cy + radius),              # bottom
-        (cx - radius + cut, cy + cut),  # bottom-left
-        (cx - radius, cy),              # left
-        (cx - radius + cut, cy - cut),  # top-left
+        (cx - h, cy - radius),       # top edge, left end
+        (cx + h, cy - radius),       # top edge, right end
+        (cx + radius, cy - h),       # right edge, top end
+        (cx + radius, cy + h),       # right edge, bottom end
+        (cx + h, cy + radius),       # bottom edge, right end
+        (cx - h, cy + radius),       # bottom edge, left end
+        (cx - radius, cy + h),       # left edge, bottom end
+        (cx - radius, cy - h),       # left edge, top end
     ]
 
 
@@ -76,25 +84,17 @@ def point_in_octagon(
 ) -> bool:
     """Return True if point (*px*, *py*) is inside the octagon.
 
-    The octagon is axis-aligned and centred at (*cx*, *cy*).
-    Uses the 3/8 slope from the original hardware.
+    The octagon is axis-aligned and centred at (*cx*, *cy*); see
+    ``octagon_points`` for the corner-chamfered-square construction.
+    The diagonal chamfer edge in the first quadrant runs from
+    (h, radius) to (radius, h), i.e. dx + dy = h + radius = 2*radius - cut.
     """
     dx = abs(px - cx)
     dy = abs(py - cy)
     if dx > radius or dy > radius:
         return False
-    # The chamfer line for a 3/8-slope octagon:
-    #   dx + (slope_den/slope_num) * dy <= radius  (first-quadrant test)
-    #   but we use the equivalent integer form to avoid floats:
-    #   slope_num * dx + slope_den * dy <= slope_den * radius
-    # Actually for a cut corner, the constraint is:
-    #   dx * slope_den + dy * slope_den <= radius * slope_den + cut * slope_den
-    # Simplify: use the standard octagon inequality
-    #   max(dx, dy, (dx+dy) * slope_den/(slope_den+slope_num)) <= radius
-    # More precisely for 3/8 slope: the corner is clipped where
-    #   dx + dy > radius + cut, with cut = radius * 3/8
     cut = (radius * slope_num) // slope_den
-    if dx + dy > radius + cut:
+    if dx + dy > 2 * radius - cut:
         return False
     return True
 
@@ -119,7 +119,12 @@ class Explosion:
     center_y: int
     max_radius: int = EXPLOSION_MAX_RADIUS
     expand_rate: int = 1          # radius units per update
-    hold_frames: int = 10         # frames to hold at max radius
+    #: Frames to hold at max radius. Each "update" here only happens
+    #: once every 5 real frames (this explosion's group is serviced
+    #: once per 5-frame group cycle), so full lifecycle (expand + hold
+    #: + contract) works out to ~2.4s -- reference footage shows blasts
+    #: lasting "a full two seconds" (deep-dive measurement).
+    hold_frames: int = 3
     contract_rate: int = 1        # radius units per update while shrinking
     group_id: int = 0             # 0-4, determines update scheduling
 

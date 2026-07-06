@@ -21,8 +21,8 @@ from src.config import (
     ABM_SPEED_SIDE,
     FIXED_POINT_SCALE,
     FIXED_POINT_SHIFT,
-    FLIER_BOMBER_MOVE_INTERVAL,
-    FLIER_SATELLITE_MOVE_INTERVAL,
+    FLIER_BOMBER_CROSS_FRAMES,
+    FLIER_SATELLITE_CROSS_FRAMES,
     MAX_ABM_SLOTS,
     MAX_ICBM_SLOTS,
     MAX_SMART_BOMBS,
@@ -483,8 +483,11 @@ class Flier:
 
     Travels at a per-wave altitude band and can fire multiple missiles
     at once.  Resurrection and firing cooldowns shorten on later waves
-    per the wave guide (bombers move 1px/3 frames, satellites 1px/2
-    frames -- see FLIER_BOMBER_MOVE_INTERVAL / FLIER_SATELLITE_MOVE_INTERVAL).
+    per the wave guide. Horizontal speed is a fixed-point fraction of
+    SCREEN_WIDTH per frame, calibrated so crossing time stays correct
+    (~12.8s bomber, ~8.5s satellite -- matching independently measured
+    reference footage) regardless of the playfield's actual pixel
+    width -- see FLIER_BOMBER_CROSS_FRAMES / FLIER_SATELLITE_CROSS_FRAMES.
     """
 
     flier_type: FlierType
@@ -496,7 +499,10 @@ class Flier:
     current_x: int = 0
     can_fire: bool = True
     is_active: bool = True
-    move_counter: int = 0
+    _x_fp: int = field(default=0, repr=False, init=False)
+
+    def __post_init__(self) -> None:
+        self._x_fp = to_fixed(self.current_x)
 
     @staticmethod
     def create_random(
@@ -524,22 +530,21 @@ class Flier:
         return (self.current_x, self.altitude)
 
     @property
-    def move_interval(self) -> int:
-        """Frames needed to advance one pixel (bombers are slower)."""
+    def cross_frames(self) -> int:
+        """Frames to cross the full screen width (bombers are slower)."""
         return (
-            FLIER_BOMBER_MOVE_INTERVAL
+            FLIER_BOMBER_CROSS_FRAMES
             if self.flier_type is FlierType.BOMBER
-            else FLIER_SATELLITE_MOVE_INTERVAL
+            else FLIER_SATELLITE_CROSS_FRAMES
         )
 
     def update(self) -> None:
-        """Move the flier one pixel every ``move_interval`` frames."""
+        """Advance by SCREEN_WIDTH / cross_frames pixels this frame."""
         if not self.is_active:
             return
-        self.move_counter += 1
-        if self.move_counter >= self.move_interval:
-            self.move_counter = 0
-            self.current_x += self.direction
+        step_fp = (to_fixed(SCREEN_WIDTH) // self.cross_frames) * self.direction
+        self._x_fp += step_fp
+        self.current_x = from_fixed(self._x_fp)
 
     def fire(
         self,

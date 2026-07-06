@@ -12,6 +12,8 @@ from src.app import (
     FRAME_TIME,
     IRQ_PER_FRAME,
     TALLY_TICK_INTERVAL_FRAMES,
+    TALLY_CITY_TICK_INTERVAL_FRAMES,
+    TALLY_PHASE_PAUSE_FRAMES,
 )
 from src.config import (
     GAME_OVER_DISPLAY_FRAMES,
@@ -337,7 +339,12 @@ class TestTallyScreen:
         app.game.icbms_remaining_this_wave = 0
         app._update()  # RUNNING -> WAVE_END
         start_score = app.tally_displayed_score
-        for _ in range(app.tally_ticks_total * TALLY_TICK_INTERVAL_FRAMES):
+        budget = (
+            app.game.last_wave_remaining_abms * TALLY_TICK_INTERVAL_FRAMES
+            + TALLY_PHASE_PAUSE_FRAMES
+            + app.game.last_wave_surviving_cities * TALLY_CITY_TICK_INTERVAL_FRAMES
+        )
+        for _ in range(budget):
             app._update()
         assert app.tally_ticks_done == app.tally_ticks_total
         assert app.tally_displayed_score == app.game.score_display.player_score

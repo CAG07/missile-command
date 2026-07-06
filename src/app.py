@@ -55,7 +55,9 @@ COLOR_CYCLE_IRQS: int = 8                       # 30 Hz color cycling
 
 MIN_SCALE: int = 1
 MAX_SCALE: int = 4
-TALLY_TICK_INTERVAL_FRAMES: int = 4  # frames between each tally count-up tick
+TALLY_TICK_INTERVAL_FRAMES: int = 4  # frames between each ABM tally count-up tick
+TALLY_CITY_TICK_INTERVAL_FRAMES: int = 10  # frames between each city tally tick (slower)
+TALLY_PHASE_PAUSE_FRAMES: int = 24  # pause between the ABM tally and city tally
 
 
 def _silo_key_map() -> dict[int, int]:
@@ -164,6 +166,8 @@ class MissileCommandApp:
     tally_ticks_total: int = 0
     tally_ticks_done: int = 0
     tally_tick_frame_counter: int = 0
+    _bonus_city_announced: bool = field(default=False, repr=False)
+    _tally_phase_pause_remaining: int = field(default=0, repr=False)
 
     # Wave-intro screen ("WAVE N" + alarm before attacks begin)
     _pending_wave_intro: bool = field(default=False, repr=False)
@@ -376,7 +380,7 @@ class MissileCommandApp:
                 elif event.key == pygame.K_F11:
                     self.renderer.toggle_fullscreen()
                 elif self._awaiting_initials:
-                    self._handle_initials_keydown(event.key)
+                    self._handle_initials_keydown(event)
                 elif event.key == pygame.K_1 and self.game.state == GameState.ATTRACT:
                     self._start_game_from_attract()
                 else:
@@ -477,16 +481,53 @@ class MissileCommandApp:
             )
             self.tally_ticks_done = 0
             self.tally_tick_frame_counter = 0
+            self._tally_phase_pause_remaining = TALLY_PHASE_PAUSE_FRAMES
+            self._bonus_city_announced = False
             return
 
         if self.game.state == GameState.WAVE_END:
             self.wave_end_timer -= 1
             if self.tally_ticks_done < self.tally_ticks_total:
-                self.tally_tick_frame_counter += 1
-                if self.tally_tick_frame_counter >= TALLY_TICK_INTERVAL_FRAMES:
-                    self.tally_tick_frame_counter = 0
-                    self.tally_ticks_done += 1
-                    self.audio.play(SoundEvent.TALLY_TICK)
+                # A brief pause between the ABM tally finishing and the
+                # city tally starting, so the two feel like distinct
+                # phases rather than one continuous count-up.
+                at_phase_boundary = (
+                    self.tally_ticks_done == self.game.last_wave_remaining_abms
+                    and self.game.last_wave_remaining_abms > 0
+                )
+                if at_phase_boundary and self._tally_phase_pause_remaining > 0:
+                    self._tally_phase_pause_remaining -= 1
+                else:
+                    in_city_phase = (
+                        self.tally_ticks_done >= self.game.last_wave_remaining_abms
+                    )
+                    # Cities tick noticeably slower than ABMs -- there are
+                    # far fewer of them, so a fast count-up reads as a blur.
+                    tick_interval = (
+                        TALLY_CITY_TICK_INTERVAL_FRAMES
+                        if in_city_phase
+                        else TALLY_TICK_INTERVAL_FRAMES
+                    )
+                    self.tally_tick_frame_counter += 1
+                    if self.tally_tick_frame_counter >= tick_interval:
+                        self.tally_tick_frame_counter = 0
+                        # ABMs are tallied first, then surviving cities -- each
+                        # phase gets its own "roll up" sound (see data/sfx/README.md).
+                        tick_event = (
+                            SoundEvent.TALLY_TICK_CITY
+                            if in_city_phase
+                            else SoundEvent.TALLY_TICK_ABM
+                        )
+                        self.tally_ticks_done += 1
+                        self.audio.play(tick_event)
+            elif (
+                not self._bonus_city_announced
+                and self.game.last_wave_bonus_cities_awarded > 0
+            ):
+                # City points have finished tallying -- announce any bonus
+                # city earned this wave.
+                self._bonus_city_announced = True
+                self.audio.play(SoundEvent.BONUS_CITY)
             if self.wave_end_timer <= 0:
                 self.audio_cues.reset_for_new_wave()
                 self._begin_wave_intro()
@@ -516,7 +557,7 @@ class MissileCommandApp:
         self._awaiting_initials = False
         self._reset_to_attract()
 
-    def _handle_initials_keydown(self, key: int) -> None:
+    def _handle_initials_keydown(self, event: "pygame.event.Event") -> None:
         """Keyboard alternative to mouse-scrubbing on the initials
         screen. Left/Right look up the current letter's position in
         the charset and step it by one, writing straight to
@@ -526,8 +567,11 @@ class MissileCommandApp:
         trackball-recenter trick's per-frame motion event (posted even
         when the physical mouse hasn't moved), which is exactly why an
         earlier version of this appeared to "do nothing". Return/Space
-        confirms, mirroring a left mouse click.
+        confirms, mirroring a left mouse click. Typing a letter/digit
+        directly sets it and advances, for players who don't expect the
+        arcade's trackball-style scrubbing.
         """
+        key = event.key
         charset = self.INITIALS_CHARSET
         if key in (pygame.K_LEFT, pygame.K_RIGHT) and self._initials_slot < 3:
             current = self._initials[self._initials_slot]
@@ -539,6 +583,13 @@ class MissileCommandApp:
             self._initials[self._initials_slot] = charset[idx]
         elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             self._initials_slot += 1
+        elif key == pygame.K_BACKSPACE and self._initials_slot > 0:
+            self._initials_slot -= 1
+        elif self._initials_slot < 3:
+            typed = getattr(event, "unicode", "").upper()
+            if typed in charset:
+                self._initials[self._initials_slot] = typed
+                self._initials_slot += 1
 
     @property
     def tally_displayed_score(self) -> int:
@@ -570,7 +621,7 @@ class MissileCommandApp:
         """Draw the trackball-style initials entry screen."""
         self.renderer.native.fill((0, 0, 0))
         self._center_text("ENTER YOUR INITIALS", 8, 50)
-        self._center_text("MOVE MOUSE, CLICK TO SELECT", 6, 68)
+        self._center_text("USE MOUSE OR TYPE LETTERS", 6, 68)
         self._center_text(self.game.score_display.format_score(), 8, 150)
 
         slot_w = 24
@@ -593,9 +644,12 @@ class MissileCommandApp:
             return
 
         if self._awaiting_initials:
-            fraction = self.crosshair_x / SCREEN_WIDTH
-            idx = max(0, min(len(self.INITIALS_CHARSET) - 1, int(fraction * len(self.INITIALS_CHARSET))))
-            self._render_initials_entry(self._initials, self._initials_slot, self.INITIALS_CHARSET[idx])
+            active_char = (
+                self._initials[self._initials_slot]
+                if self._initials_slot < 3
+                else ""
+            )
+            self._render_initials_entry(self._initials, self._initials_slot, active_char)
         elif self._pending_wave_intro:
             self._render_wave_intro_screen()
         elif self.game.state == GameState.ATTRACT:
@@ -650,15 +704,26 @@ class MissileCommandApp:
 
     def _render_wave_end(self) -> None:
         mult = self.game.multiplier
+        # ABMs are tallied first (see _update), so city reveal only starts
+        # once those ticks are done.
+        cities_stamped = max(
+            0, min(
+                self.tally_ticks_done - self.game.last_wave_remaining_abms,
+                self.game.last_wave_surviving_cities,
+            ),
+        )
         self._center_text(f"WAVE {self.game.wave_number - 1} COMPLETE", 8, 50)
         self._center_text(
             f"CITIES {self.game.last_wave_surviving_cities} X 100 X {mult}", 7, 90,
         )
+        self.renderer.draw_city_tally_row(self.game.last_wave_surviving_cities, cities_stamped)
         self._center_text(
-            f"ABMS {self.game.last_wave_remaining_abms} X 5 X {mult}", 7, 105,
+            f"ABMS {self.game.last_wave_remaining_abms} X 5 X {mult}", 7, 118,
         )
-        self._center_text(f"BONUS {self.game.last_wave_bonus}", 8, 125)
-        self._center_text(f"SCORE {self.tally_displayed_score}", 8, 150)
+        self._center_text(f"BONUS {self.game.last_wave_bonus}", 8, 138)
+        self._center_text(f"SCORE {self.tally_displayed_score}", 8, 163)
+        if self._bonus_city_announced:
+            self._center_text("BONUS CITY", 8, 183, color=(255, 220, 0))
 
     def _render_game_over(self) -> None:
         self.renderer.draw_the_end(self.game_over_timer)

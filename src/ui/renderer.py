@@ -233,6 +233,31 @@ class Renderer:
                     x, GROUND_Y, palette.city, self._CITY_TUFT_SPREAD, self._CITY_TUFT_HEIGHTS,
                 )
 
+    #: Baseline Y and horizontal spacing for the wave-end city tally row --
+    #: a dedicated, undamaged city icon per surviving city, kept separate
+    #: from the real battlefield (which may still show nearby scorching
+    #: even for a city that survived the wave).
+    _CITY_TALLY_ROW_Y = 108
+    _CITY_TALLY_ROW_SPACING = 20
+
+    def draw_city_tally_row(self, total: int, revealed: int) -> None:
+        """Draw a row of clean city icons across the screen, revealing
+        them left-to-right one at a time as the wave-end tally counts up
+        surviving cities (synced to the roll_up_2 tick sound)."""
+        if total <= 0:
+            return
+        spacing = self._CITY_TALLY_ROW_SPACING
+        start_x = SCREEN_WIDTH // 2 - (spacing * (total - 1)) // 2
+        for i in range(total):
+            x = start_x + i * spacing
+            if i < revealed:
+                self._draw_spiky_cluster(
+                    x, self._CITY_TALLY_ROW_Y, (255, 220, 0),
+                    self._CITY_TUFT_SPREAD, self._CITY_TUFT_HEIGHTS,
+                )
+            else:
+                pygame.draw.circle(self.native, (70, 70, 70), (x, self._CITY_TALLY_ROW_Y), 1)
+
     def _draw_spiky_cluster(
         self, cx: int, base_y: int, color, spread: int, heights: tuple[int, ...],
     ) -> None:
@@ -298,6 +323,11 @@ class Renderer:
         pygame.draw.line(self.native, color, (x, base_y), (x - 1, base_y + 1))
         pygame.draw.line(self.native, color, (x, base_y), (x + 1, base_y + 1))
 
+    #: Bright green, verified distinct from every color in every wave
+    #: palette (city/silo/abm_trail/icbm_trail) so smart bombs always
+    #: read as visually different from regular ICBMs.
+    _SMART_BOMB_COLOR = (50, 255, 50)
+
     def _draw_missiles(self, game: Game, palette: Palette) -> None:
         for abm in game.missiles.abm_slots:
             if abm is not None and abm.is_active:
@@ -310,7 +340,11 @@ class Renderer:
         for missile in game.missiles.icbm_slots:
             if missile is None or not missile.is_active:
                 continue
-            color = (255, 210, 60) if isinstance(missile, SmartBomb) else palette.icbm_trail
+            # A fixed color here previously collided exactly with
+            # PALETTES[2].icbm_trail (255, 210, 60) on waves 3/7/11/...,
+            # making smart bombs indistinguishable from regular ICBMs.
+            # Bright green doesn't appear in any wave palette's colors.
+            color = self._SMART_BOMB_COLOR if isinstance(missile, SmartBomb) else palette.icbm_trail
             pygame.draw.line(
                 self.native, color,
                 (missile.entry_x, missile.entry_y), missile.current_pos,
@@ -393,12 +427,22 @@ class Renderer:
 
     # ── Game over: "THE END" ──────────────────────────────────────────────
 
+    #: Frame (relative to draw_the_end's frame_count) at which the
+    #: expanding octagon first reaches max_radius -- this is when the
+    #: hidden-face easter egg flashes, homaging the original arcade
+    #: game's famous accidental "face in the mushroom cloud" that's
+    #: only ever visible for a handful of frames.
+    _FACE_FLASH_START = 50
+    _FACE_FLASH_FRAMES = 6
+
     def draw_the_end(self, frame_count: int) -> None:
         """Draw the expanding octagonal "THE END" game-over screen.
 
         A yellow octagon expands from the center over ~1.5s, then a
         red "THE END" caption fades in once it's large enough to
         contain the text, over the ruined (already-drawn) landscape.
+        Right as the octagon reaches full size, a hidden face flashes
+        briefly inside it (see _draw_hidden_face).
         """
         max_radius = 150
         radius = min(max_radius, frame_count * 3)
@@ -411,3 +455,30 @@ class Renderer:
             x = cx - surf.get_width() // 2
             y = cy - surf.get_height() // 2
             self.native.blit(surf, (x, y))
+        if (
+            self._FACE_FLASH_START
+            <= frame_count
+            < self._FACE_FLASH_START + self._FACE_FLASH_FRAMES
+        ):
+            self._draw_hidden_face(cx, cy, radius)
+
+    def _draw_hidden_face(self, cx: int, cy: int, radius: int) -> None:
+        """Flash a small face inside the fully-expanded octagon.
+
+        Sized and positioned relative to *radius* so it stays inside
+        the octagon's bounds.
+        """
+        eye_dx = radius // 3
+        eye_dy = -radius // 6
+        eye_r = max(2, radius // 12)
+        color = (20, 20, 20)
+        pygame.draw.circle(self.native, color, (cx - eye_dx, cy + eye_dy), eye_r)
+        pygame.draw.circle(self.native, color, (cx + eye_dx, cy + eye_dy), eye_r)
+        mouth_y = cy + radius // 4
+        mouth_half_w = radius // 3
+        pygame.draw.arc(
+            self.native, color,
+            (cx - mouth_half_w, mouth_y - radius // 6, mouth_half_w * 2, radius // 3),
+            3.4, 6.03,
+            max(2, radius // 20),
+        )

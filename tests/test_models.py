@@ -13,11 +13,13 @@ from src.config import (
     ABM_SPEED_SIDE,
     BONUS_CITY_POINTS,
     EXPLOSION_MAX_RADIUS,
+    FLIER_BOMBER_CROSS_FRAMES,
     MAX_ABM_SLOTS,
     MAX_CITIES_DESTROYED_PER_WAVE,
     MAX_ICBM_SLOTS,
     MIRV_ALTITUDE_HIGH,
     MIRV_ALTITUDE_LOW,
+    SCREEN_WIDTH,
     SILO_CAPACITY,
 )
 from src.models.missile import (
@@ -500,12 +502,22 @@ class TestExplosion:
         pts = octagon_points(100, 100, 13)
         assert len(pts) == 8
 
-    def test_octagon_shape_squarish(self):
+    def test_octagon_has_flat_edges_not_a_diamond(self):
+        """Each cardinal side is a flat edge (2 distinct vertices at the
+        same extreme coordinate), not a single point -- a single point
+        per cardinal side degenerates into a diamond (see octagon_points
+        docstring)."""
         pts = octagon_points(100, 100, 13)
-        # Top vertex should be directly above center
-        assert pts[0] == (100, 87)
-        # Right vertex should be directly right
-        assert pts[2] == (113, 100)
+        top_left, top_right = pts[0], pts[1]
+        assert top_left[1] == top_right[1] == 87  # both on the top edge
+        assert top_left[0] != top_right[0]  # distinct points, not one
+
+    def test_octagon_bounding_box(self):
+        pts = octagon_points(100, 100, 13)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        assert min(xs) == 87 and max(xs) == 113
+        assert min(ys) == 87 and max(ys) == 113
 
     def test_point_in_octagon_center(self):
         assert point_in_octagon(100, 100, 100, 100, 13)
@@ -871,15 +883,13 @@ class TestFlier:
         assert f.is_active
         assert f.flier_type in (FlierType.BOMBER, FlierType.SATELLITE)
 
-    def test_bomber_moves_one_pixel_every_three_frames(self):
+    def test_bomber_crosses_full_screen_in_cross_frames(self):
         f = Flier(flier_type=FlierType.BOMBER, altitude=115,
                   direction=1, speed=1, resurrection_timer=60,
                   firing_timer=30, current_x=0)
-        f.update()
-        f.update()
-        assert f.current_x == 0
-        f.update()
-        assert f.current_x == 1
+        for _ in range(FLIER_BOMBER_CROSS_FRAMES):
+            f.update()
+        assert abs(f.current_x - SCREEN_WIDTH) <= 3
 
     def test_fire(self):
         f = Flier(flier_type=FlierType.SATELLITE, altitude=115,

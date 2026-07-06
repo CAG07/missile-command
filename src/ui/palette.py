@@ -51,11 +51,21 @@ PALETTES: list[Palette] = [
     ),
 ]
 
+#: The disassembly says explosions "rotate through all 8 possible
+#: colors" at 30Hz -- on this era's hardware that's a 3-bit RGB palette
+#: (each channel fully on or off), i.e. the 8 corners of the RGB cube.
+#: Verified against missile-command-arcade.gif: sampled explosion pixels
+#: came back as pure magenta (254,1,254), cyan (1,253,253), blue
+#: (1,0,252), and white (254,254,254) -- exactly 4 of those 8 corners.
+#: Black is excluded here since it's invisible against the black sky.
 EXPLOSION_COLORS: list[tuple[int, int, int]] = [
-    (255, 255, 255),
-    (255, 220, 80),
-    (255, 140, 40),
-    (255, 60, 60),
+    (255, 255, 255),  # white
+    (0, 0, 255),      # blue
+    (0, 255, 0),       # green
+    (0, 255, 255),    # cyan
+    (255, 0, 0),      # red
+    (255, 0, 255),    # magenta
+    (255, 255, 0),    # yellow
 ]
 
 FLASH_COLORS: list[tuple[int, int, int]] = [

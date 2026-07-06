@@ -24,7 +24,8 @@ class SoundEvent(Enum):
     WAVE_START = auto()
     WAVE_END = auto()
     BONUS_CITY = auto()
-    TALLY_TICK = auto()
+    TALLY_TICK_CITY = auto()
+    TALLY_TICK_ABM = auto()
     GAME_OVER = auto()
     FLIER_DRONE = auto()
     SMART_BOMB_WARBLE = auto()
@@ -46,7 +47,8 @@ _SOUND_FILES: dict[SoundEvent, str] = {
     SoundEvent.WAVE_START: "start_wave.wav",
     SoundEvent.WAVE_END: "bonus_points.wav",
     SoundEvent.BONUS_CITY: "bonus_city.wav",
-    SoundEvent.TALLY_TICK: "tally_tick.wav",
+    SoundEvent.TALLY_TICK_CITY: "roll_up_2.wav",
+    SoundEvent.TALLY_TICK_ABM: "roll_up_1.wav",
     SoundEvent.GAME_OVER: "game_over.wav",
     SoundEvent.FLIER_DRONE: "flier.wav",
     SoundEvent.SMART_BOMB_WARBLE: "smart_bomb.wav",
@@ -182,7 +184,8 @@ class AudioManager:
             SoundEvent.WAVE_START: synth.wave_start,
             SoundEvent.WAVE_END: synth.wave_end_bonus,
             SoundEvent.BONUS_CITY: synth.bonus_city,
-            SoundEvent.TALLY_TICK: synth.tally_tick,
+            SoundEvent.TALLY_TICK_CITY: synth.tally_tick,
+            SoundEvent.TALLY_TICK_ABM: synth.tally_tick,
             SoundEvent.GAME_OVER: synth.game_over,
             SoundEvent.FLIER_DRONE: synth.flier_drone_loop,
             SoundEvent.SMART_BOMB_WARBLE: synth.smart_bomb_warble_loop,
