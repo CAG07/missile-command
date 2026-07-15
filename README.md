@@ -12,11 +12,11 @@ three silos. The game reproduces the original arcade's core mechanics:
 
 - 60Hz game loop with simulated 240Hz IRQ timing
 - Slot-based object tables (8 ABM, 8 ICBM, 1 flier, 20 explosions in 5 groups of 4)
-- Fixed-point 8.8 missile movement (not Bresenham lines)
+- Fixed-point 8.8 missile movement
 - Octagonal explosions (corner-chamfered square), color-cycled at 30Hz
 - Smart bombs with evasive movement, MIRV splitting, bomber/satellite fliers
 - Attack pacing, mercy rule, and scoring multiplier matching the wave guide
-- Procedural POKEY-style audio synthesis (no ROM samples)
+- Procedural POKEY-style audio synthesis
 - Attract-mode autoplay demo and mouse-driven high-score initials entry
 
 ## Installation
@@ -92,31 +92,6 @@ screen counts up the bonus tick by tick before the next wave begins.
 - The banked bonus-city count is an 8-bit value that wraps at 256, matching
   the original hardware
 
-### Attack Waves
-- ICBM counts, speeds, smart-bomb introduction (wave 6), and flier cooldown /
-  altitude tables are taken from the disassembly's wave guide, not
-  approximated
-- New attacks are paced by the highest in-flight missile's altitude
-  (`202 - 2 * wave_number`, floor 180) and launch in batches
-- ICBMs can MIRV-split mid-flight per the altitude-scan conditions at
-  `$5379`/`$56d1`: an eligible missile must be in the 128–159 altitude band
-  with nothing already seen above 159, and slots/wave-budget must remain
-- Smart bombs move like ordinary missiles until an explosion is nearby, then
-  evade without changing target; capped at 2 on screen at once. These are distinct green lines
-  instead of the dots that represent smart bombs in the original game
-- Fliers (bomber or satellite) appear from wave 2, fly at a per-wave altitude
-  band, and periodically release ICBMs of their own
-- **Mercy rule**: the player never loses more than 3 cities in a single wave;
-  if that cap is hit and no ABMs remain, the wave ends immediately
-
-### Explosions
-- Octagons (not circles) — max radius 13
-- Expand, hold, then contract; 20 slots in 5 groups of 4, one group updated
-  per frame to spread the per-frame cost
-- Collision against ICBMs/smart bombs is checked only when a group updates
-  (every 5 frames); ABMs pass through explosions unharmed; no collision below
-  screen line 33
-
 ## Command Line Options
 ```bash
 python main.py [OPTIONS]
@@ -180,44 +155,6 @@ New attacks don't launch while highest ICBM is above:
 - Group-based explosion updates
 - Fixed-point math for efficiency
 - Optimized rendering pipeline
-
-## Testing
-
-Run the test suite:
-```bash
-pytest tests/
-```
-
-With coverage:
-```bash
-pytest --cov=src tests/
-```
-
-## Development
-
-### Debug Mode
-```bash
-python missile-defense.py --debug
-```
-
-Shows:
-- FPS counter
-- Slot occupancy (ABM, ICBM, Explosions)
-- Frame timing
-- Collision boxes
-- Grid overlay
-
-### Code Quality
-```bash
-# Format code
-black src/ tests/
-
-# Lint
-flake8 src/ tests/
-
-# Type checking
-mypy src/
-```
 
 ## References
 
