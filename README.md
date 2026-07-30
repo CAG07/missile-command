@@ -1,7 +1,6 @@
 # Missile Command
 
-A faithful recreation of the 1980 Atari arcade game **Missile Command**, built
-against the annotated 6502 disassembly of the rev 3 ROMs.
+A faithful recreation of the 1980 Atari arcade game **Missile Command**
 
 ![Missile Command](missile-command-arcade.gif)
 
